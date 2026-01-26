@@ -1,0 +1,507 @@
+@import "tailwindcss";
+
+/* ============================================
+ * Design System - Theme Tokens
+ * ============================================
+ * 
+ * 设计规范：
+ * - 所有颜色使用语义化命名
+ * - 圆角统一使用 radius-* 令牌
+ * - 间距使用 Tailwind 默认 spacing
+ */
+
+/* Custom Tailwind Theme */
+@theme {
+  /* ============================================
+   * Background colors
+   * ============================================ */
+  --color-bg-000: hsl(var(--bg-000));
+  --color-bg-100: hsl(var(--bg-100));
+  --color-bg-200: hsl(var(--bg-200));
+  --color-bg-300: hsl(var(--bg-300));
+  --color-bg-400: hsl(var(--bg-400));
+  
+  /* ============================================
+   * Text colors
+   * ============================================ */
+  --color-text-000: hsl(var(--text-000));
+  --color-text-100: hsl(var(--text-100));
+  --color-text-200: hsl(var(--text-200));
+  --color-text-300: hsl(var(--text-300));
+  --color-text-400: hsl(var(--text-400));
+  --color-text-500: hsl(var(--text-500));
+  --color-text-600: hsl(var(--text-600));
+  
+  /* ============================================
+   * Accent colors (brand)
+   * ============================================ */
+  --color-accent-brand: hsl(var(--accent-brand));
+  --color-accent-main-000: hsl(var(--accent-main-000));
+  --color-accent-main-100: hsl(var(--accent-main-100));
+  --color-accent-main-200: hsl(var(--accent-main-200));
+  --color-accent-secondary-100: hsl(var(--accent-secondary-100));
+  
+  /* ============================================
+   * Semantic colors
+   * ============================================ */
+  /* Success (green) */
+  --color-success-100: hsl(var(--success-100));
+  --color-success-200: hsl(var(--success-200));
+  --color-success-bg: hsl(var(--success-bg));
+  
+  /* Warning (orange/yellow) */
+  --color-warning-100: hsl(var(--warning-100));
+  --color-warning-200: hsl(var(--warning-200));
+  --color-warning-bg: hsl(var(--warning-bg));
+  
+  /* Danger (red) */
+  --color-danger-000: hsl(var(--danger-000));
+  --color-danger-100: hsl(var(--danger-100));
+  --color-danger-200: hsl(var(--danger-200));
+  --color-danger-bg: hsl(var(--danger-bg));
+  --color-danger-900: hsl(var(--danger-900));
+  
+  /* Info (blue) */
+  --color-info-100: hsl(var(--info-100));
+  --color-info-200: hsl(var(--info-200));
+  --color-info-bg: hsl(var(--info-bg));
+  
+  /* ============================================
+   * Border colors
+   * ============================================ */
+  --color-border-100: hsl(var(--border-100));
+  --color-border-200: hsl(var(--border-200));
+  --color-border-300: hsl(var(--border-300));
+  
+  /* ============================================
+   * Special colors
+   * ============================================ */
+  --color-oncolor-100: hsl(var(--oncolor-100));
+  
+  /* ============================================
+   * Border Radius - 统一圆角规范
+   * ============================================
+   * 使用场景：
+   * - xs: 小元素如 tag, badge
+   * - sm: 按钮, 输入框内部元素
+   * - md: 卡片, 下拉菜单
+   * - lg: 大卡片, 对话框
+   * - xl: 输入框容器, 消息气泡
+   * - full: 圆形按钮, 头像
+   */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+  
+  /* ============================================
+   * Shadows
+   * ============================================ */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+  --shadow-float: 0 4px 20px 0 rgb(0 0 0 / 0.15);
+  
+  /* ============================================
+   * Sizing - Collapsible Components
+   * ============================================ */
+  --collapsed-min-w: 160px;
+  --collapsed-max-w: 200px;
+  
+  /* ============================================
+   * Sizing - Message Layout
+   * ============================================ */
+  --message-user-max-w: 85%;
+  --attachment-thumb-w: 140px;
+  --attachment-expanded-max-w: 500px;
+  --menu-width: 360px;
+  
+  /* ============================================
+   * Fonts
+   * ============================================ */
+  --font-ui-sans: 'Inter', system-ui, sans-serif;
+  --font-ui-serif: 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ============================================
+ * CSS Variables - Light Mode (Default)
+ * ============================================ */
+:root {
+  /* Background */
+  --bg-000: 0 0% 100%;
+  --bg-100: 48 33.3% 97.1%;
+  --bg-200: 53 28.6% 94.5%;
+  --bg-300: 48 25% 92.2%;
+  --bg-400: 50 20.7% 88.6%;
+  
+  /* Text */
+  --text-000: 0 0% 100%;
+  --text-100: 0 0% 10%;
+  --text-200: 0 0% 40%;
+  --text-300: 0 0% 55%;
+  --text-400: 0 0% 65%;
+  --text-500: 0 0% 75%;
+  --text-600: 0 0% 85%;
+  
+  /* Accent (brand orange) */
+  --accent-brand: 15 63.1% 59.6%;
+  --accent-main-000: 15 54.2% 51.2%;
+  --accent-main-100: 15 54.2% 51.2%;
+  --accent-main-200: 15 63.1% 59.6%;
+  --accent-secondary-100: 210 70.9% 51.6%;
+  
+  /* Success (green) */
+  --success-100: 142 71% 45%;
+  --success-200: 142 76% 36%;
+  --success-bg: 142 76% 95%;
+  
+  /* Warning (amber) */
+  --warning-100: 38 92% 50%;
+  --warning-200: 32 95% 44%;
+  --warning-bg: 48 96% 95%;
+  
+  /* Danger (red) */
+  --danger-000: 0 58.6% 34.1%;
+  --danger-100: 0 72% 51%;
+  --danger-200: 0 84% 60%;
+  --danger-bg: 0 86% 97%;
+  --danger-900: 0 50% 95%;
+  
+  /* Info (blue) */
+  --info-100: 210 80% 52%;
+  --info-200: 210 90% 60%;
+  --info-bg: 210 100% 97%;
+  
+  /* Border */
+  --border-100: 30 3.3% 11.8%;
+  --border-200: 30 3.3% 11.8%;
+  --border-300: 30 3.3% 11.8%;
+  
+  /* Special */
+  --always-black: 0 0% 0%;
+  --always-white: 0 0% 100%;
+  --oncolor-100: 0 0% 100%;
+}
+
+/* ============================================
+ * CSS Variables - Dark Mode (System Preference)
+ * ============================================ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode="light"]) {
+    /* Background */
+    --bg-000: 30 3% 20%;
+    --bg-100: 30 3% 15%;
+    --bg-200: 30 3% 12%;
+    --bg-300: 30 3% 9%;
+    --bg-400: 0 0% 5%;
+    
+    /* Text */
+    --text-000: 0 0% 100%;
+    --text-100: 40 20% 95%;
+    --text-200: 40 10% 75%;
+    --text-300: 40 5% 60%;
+    --text-400: 40 3% 50%;
+    --text-500: 40 2% 40%;
+    --text-600: 40 2% 30%;
+    
+    /* Accent */
+    --accent-brand: 24 70% 55%;
+    --accent-main-000: 24 75% 50%;
+    --accent-main-100: 24 80% 58%;
+    --accent-main-200: 24 85% 62%;
+    --accent-secondary-100: 210 80% 60%;
+    
+    /* Success */
+    --success-100: 142 70% 50%;
+    --success-200: 142 65% 60%;
+    --success-bg: 142 50% 15%;
+    
+    /* Warning */
+    --warning-100: 38 90% 55%;
+    --warning-200: 38 85% 65%;
+    --warning-bg: 38 50% 15%;
+    
+    /* Danger */
+    --danger-000: 0 85% 65%;
+    --danger-100: 0 70% 55%;
+    --danger-200: 0 75% 65%;
+    --danger-bg: 0 50% 15%;
+    --danger-900: 0 50% 25%;
+    
+    /* Info */
+    --info-100: 210 85% 60%;
+    --info-200: 210 80% 70%;
+    --info-bg: 210 50% 15%;
+    
+    /* Border */
+    --border-100: 40 5% 25%;
+    --border-200: 40 5% 30%;
+    --border-300: 40 5% 35%;
+  }
+}
+
+/* ============================================
+ * CSS Variables - Dark Mode (Manual Override)
+ * ============================================ */
+[data-mode="dark"] {
+  /* Background */
+  --bg-000: 30 3% 20%;
+  --bg-100: 30 3% 15%;
+  --bg-200: 30 3% 12%;
+  --bg-300: 30 3% 9%;
+  --bg-400: 0 0% 5%;
+  
+  /* Text */
+  --text-000: 0 0% 100%;
+  --text-100: 40 20% 95%;
+  --text-200: 40 10% 75%;
+  --text-300: 40 5% 60%;
+  --text-400: 40 3% 50%;
+  --text-500: 40 2% 40%;
+  --text-600: 40 2% 30%;
+  
+  /* Accent */
+  --accent-brand: 24 70% 55%;
+  --accent-main-000: 24 75% 50%;
+  --accent-main-100: 24 80% 58%;
+  --accent-main-200: 24 85% 62%;
+  --accent-secondary-100: 210 80% 60%;
+  
+  /* Success */
+  --success-100: 142 70% 50%;
+  --success-200: 142 65% 60%;
+  --success-bg: 142 50% 15%;
+  
+  /* Warning */
+  --warning-100: 38 90% 55%;
+  --warning-200: 38 85% 65%;
+  --warning-bg: 38 50% 15%;
+  
+  /* Danger */
+  --danger-000: 0 85% 65%;
+  --danger-100: 0 70% 55%;
+  --danger-200: 0 75% 65%;
+  --danger-bg: 0 50% 15%;
+  --danger-900: 0 50% 25%;
+  
+  /* Info */
+  --info-100: 210 85% 60%;
+  --info-200: 210 80% 70%;
+  --info-bg: 210 50% 15%;
+  
+  /* Border */
+  --border-100: 40 5% 25%;
+  --border-200: 40 5% 30%;
+  --border-300: 40 5% 35%;
+}
+
+/* Font Faces - using local fallbacks for now */
+@font-face {
+  font-family: 'Anthropic Sans';
+  src: local('Inter'), local('system-ui'), local('sans-serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Anthropic Serif';
+  src: local('Georgia'), local('serif');
+  font-weight: 100 900;
+}
+
+/* Base styles */
+body {
+  margin: 0;
+  font-family: var(--font-ui-sans);
+}
+
+/* Utility classes */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom scrollbar - 恢复显示，尽可能使用 overlay */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-300) / 0.5) transparent;
+  overflow-y: overlay; /* 尝试 overlay */
+}
+
+/* 兼容性回退 */
+@supports not (overflow-y: overlay) {
+  .custom-scrollbar {
+    overflow-y: auto;
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px; /* 稍微宽一点以支持透明边框技巧 */
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border-300) / 0.4);
+  border-radius: 99px;
+  border: 3px solid transparent; /* 透明边框让 thumb 变小并产生间距感 */
+  background-clip: padding-box; /* 让背景色只在 content-box 内绘制 */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--border-300) / 0.7);
+}
+
+/* Message animations */
+@keyframes message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes message-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Animation utility classes */
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: slide-in-from-bottom;
+}
+
+.scale-in {
+  animation-name: scale-in;
+}
+
+.duration-200 {
+  animation-duration: 200ms;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+/* Custom Animations */
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1); }
+}
+
+.animate-breathe {
+  animation: breathe 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================
+ * Mention tag styles
+ * ============================================ */
+.mention-tag {
+  font-weight: 500;
+}
+
+/* Agent mention - uses accent (orange) */
+.mention-tag[data-mention-type="agent"] {
+  color: hsl(var(--accent-main-100));
+}
+
+/* File mention - uses info (blue) */
+.mention-tag[data-mention-type="file"] {
+  color: hsl(var(--info-100));
+}
+
+/* Folder mention - uses success (green) */
+.mention-tag[data-mention-type="folder"] {
+  color: hsl(var(--success-100));
+}
+
+/* ============================================
+ * Content Enter Animation
+ * ============================================
+ * 内容出现时的流畅渐显动画
+ * 使用纯透明度过渡，避免位移带来的"蹦"的感觉
+ */
+@keyframes content-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-content-in {
+  animation: content-in 0.3s ease-out both;
+}
+
+/* 子元素依次出现的效果 */
+.animate-stagger > * {
+  animation: content-in 0.3s ease-out both;
+}
+
+.animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.animate-stagger > *:nth-child(2) { animation-delay: 80ms; }
+.animate-stagger > *:nth-child(3) { animation-delay: 160ms; }
+.animate-stagger > *:nth-child(4) { animation-delay: 240ms; }
+.animate-stagger > *:nth-child(5) { animation-delay: 320ms; }
+
+/* ============================================
+ * Border Pulse Animation (InputBox waiting)
+ * ============================================ */
+@keyframes border-pulse {
+  0%, 100% { 
+    border-color: hsl(var(--accent-main-100) / 0.5);
+  }
+  50% { 
+    border-color: hsl(var(--accent-main-100) / 0.2);
+  }
+}
+
+.animate-border-pulse {
+  animation: border-pulse 2s ease-in-out infinite;
+}
