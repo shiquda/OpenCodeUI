@@ -98,12 +98,23 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
       if (isUserScrollingRef.current || suppressScrollRef.current || !isUserAtBottomRef.current) {
         return
       }
+      
+      // 1. Virtuoso 滚动
       virtuosoRef.current?.scrollToIndex({ 
         index: visibleMessagesCountRef.current - 1, 
         align: 'end', 
         behavior: 'auto' 
       })
-    }, 100)  // 每 100ms 检查一次
+      
+      // 2. 强制 DOM 滚动补充 (以防 Virtuoso 没到底)
+      if (scrollParent) {
+        // 允许 10px 误差
+        const distanceToBottom = scrollParent.scrollHeight - scrollParent.scrollTop - scrollParent.clientHeight
+        if (distanceToBottom > 10 && distanceToBottom < 300) { // 只有接近底部才强制滚，避免用户看历史时乱跳
+           scrollParent.scrollTop = scrollParent.scrollHeight
+        }
+      }
+    }, 50)  // 加快检查频率到 50ms
     
     return () => clearInterval(scrollInterval)
   }, [isStreaming])
