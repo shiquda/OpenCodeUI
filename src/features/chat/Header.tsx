@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ComposeIcon, CogIcon, MoreHorizontalIcon, TeachIcon, SidebarIcon, MaximizeIcon, MinimizeIcon } from '../../components/Icons'
+import { ComposeIcon, CogIcon, MoreHorizontalIcon, TeachIcon, SidebarIcon, MaximizeIcon, MinimizeIcon, SunIcon, MoonIcon, SystemIcon } from '../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton } from '../../components/ui'
 import { ModelSelector } from './ModelSelector'
 import { SettingsDialog } from '../settings/SettingsDialog'
@@ -14,7 +14,7 @@ interface HeaderProps {
   onNewChat: () => void
   onToggleSidebar: () => void
   themeMode: ThemeMode
-  onThemeChange: (mode: ThemeMode) => void
+  onThemeChange: (mode: ThemeMode, event?: React.MouseEvent) => void
   isWideMode?: boolean
   onToggleWideMode?: () => void
 }
@@ -110,9 +110,32 @@ export function Header({
             isOpen={settingsMenuOpen}
             position="bottom"
             align="right"
-            width={180}
+            width={200}
           >
             <div ref={settingsMenuRef} className="py-1">
+              <div className="px-2 pt-2 pb-1">
+                <div className="text-[10px] font-bold text-text-400 uppercase tracking-wider px-2 mb-1.5">Appearance</div>
+                <div className="flex bg-bg-100/50 p-1 rounded-lg border border-border-200/50">
+                  {(['system', 'light', 'dark'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={(e) => onThemeChange(m, e)}
+                      className={`flex-1 flex items-center justify-center py-1.5 rounded-md text-xs font-medium transition-all ${
+                        themeMode === m
+                          ? 'bg-bg-000 text-text-100 shadow-sm ring-1 ring-border-200/50'
+                          : 'text-text-400 hover:text-text-200 hover:bg-bg-200/50'
+                      }`}
+                      title={m.charAt(0).toUpperCase() + m.slice(1)}
+                    >
+                      {m === 'system' && <SystemIcon size={14} />}
+                      {m === 'light' && <SunIcon size={14} />}
+                      {m === 'dark' && <MoonIcon size={14} />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="my-1 border-t border-border-200/50" />
+              
               <MenuItem
                 icon={<CogIcon />}
                 label="Settings"

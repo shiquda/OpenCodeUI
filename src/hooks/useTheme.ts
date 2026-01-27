@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 
@@ -7,6 +8,8 @@ export function useTheme() {
     const saved = localStorage.getItem('theme-mode')
     return (saved as ThemeMode) || 'system'
   })
+  
+  const skipNextTransitionRef = useRef(false)
 
   // 获取系统偏好
   const getSystemPreference = useCallback(() => {
@@ -19,6 +22,18 @@ export function useTheme() {
   // 应用主题到 DOM
   useEffect(() => {
     const root = document.documentElement
+    
+    // 如果是 View Transition 触发的，跳过 CSS 过渡类
+    if (skipNextTransitionRef.current) {
+      skipNextTransitionRef.current = false
+    } else {
+      // 添加过渡类
+      root.classList.add('theme-transitioning')
+      // 移除过渡类
+      setTimeout(() => {
+        root.classList.remove('theme-transitioning')
+      }, 300)
+    }
     
     if (mode === 'system') {
       root.removeAttribute('data-mode')
@@ -57,11 +72,51 @@ export function useTheme() {
     })
   }, [])
 
+  const setThemeWithAnimation = useCallback((newMode: ThemeMode, event?: React.MouseEvent) => {
+    // @ts-ignore - View Transitions API types might not be available
+    if (!document.startViewTransition || !event) {
+      setMode(newMode)
+      return
+    }
+
+    const x = event.clientX
+    const y = event.clientY
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    )
+
+    // @ts-ignore
+    const transition = document.startViewTransition(() => {
+      skipNextTransitionRef.current = true
+      flushSync(() => {
+        setMode(newMode)
+      })
+    })
+
+    transition.ready.then(() => {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${endRadius}px at ${x}px ${y}px)`,
+          ],
+        },
+        {
+          duration: 500,
+          easing: 'ease-in-out',
+          pseudoElement: '::view-transition-new(root)',
+        }
+      )
+    })
+  }, [])
+
   return {
     mode,
     resolvedTheme,
     setTheme,
     toggleTheme,
+    setThemeWithAnimation,
     isDark: resolvedTheme === 'dark',
   }
 }

@@ -60,7 +60,7 @@ function App() {
   // Hooks
   // ============================================
   const { resetPermissions } = usePermissions()
-  const { mode: themeMode, setTheme } = useTheme()
+  const { mode: themeMode, setTheme, setThemeWithAnimation } = useTheme()
   const { models, isLoading: modelsLoading } = useModels()
   const { sessionId: routeSessionId, navigateToSession, navigateHome } = useRouter()
   const { currentDirectory, sidebarExpanded, setSidebarExpanded } = useDirectory()
@@ -413,7 +413,7 @@ function App() {
                 onNewChat={handleNewSession}
                 onToggleSidebar={() => setSidebarExpanded(!sidebarExpanded)}
                 themeMode={themeMode}
-                onThemeChange={setTheme}
+                onThemeChange={setThemeWithAnimation}
                 isWideMode={isWideMode}
                 onToggleWideMode={toggleWideMode}
               />
