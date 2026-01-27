@@ -104,7 +104,9 @@ export const MentionMenu = forwardRef<MentionMenuHandle, MentionMenuProps>(funct
     setLoading(true)
     // 确保 path 不带尾斜杠
     const cleanPath = path.replace(/\/+$/, '') || '.'
-    listDirectory(cleanPath)
+    
+    // 传入 rootPath 作为工作目录
+    listDirectory(cleanPath, rootPath)
       .then(nodes => {
         const folders: MentionItem[] = []
         const files: MentionItem[] = []
@@ -142,7 +144,7 @@ export const MentionMenu = forwardRef<MentionMenuHandle, MentionMenuProps>(funct
         setItems([])
       })
       .finally(() => setLoading(false))
-  }, [agents, createItem])
+  }, [agents, createItem, rootPath])
 
   // 搜索逻辑 - 基于 query prop
   useEffect(() => {
@@ -172,7 +174,7 @@ export const MentionMenu = forwardRef<MentionMenuHandle, MentionMenuProps>(funct
         
         setLoading(true)
         
-        searchFiles(query, { limit: 20 })
+        searchFiles(query, { limit: 20, directory: rootPath })
           .then(paths => {
             const folders: MentionItem[] = []
             const fileItems: MentionItem[] = []
@@ -211,7 +213,7 @@ export const MentionMenu = forwardRef<MentionMenuHandle, MentionMenuProps>(funct
           .finally(() => setLoading(false))
       }
     }
-  }, [isOpen, query, agents, loadDirectory, createItem])
+  }, [isOpen, query, agents, loadDirectory, createItem, rootPath])
 
   // 暴露方法给父组件
   useImperativeHandle(ref, () => ({
