@@ -73,7 +73,9 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
   }, [part.text, isPartStreaming, expanded])
 
   return (
-    <div className={`border border-border-300/20 rounded-xl overflow-hidden w-auto -mx-3`}>
+    <div className={`border border-border-300/20 rounded-xl overflow-hidden transition-all duration-300 ease-out ${
+      expanded ? 'w-[calc(100%+1.5rem)] -ml-3' : 'w-[260px] ml-0'
+    }`}>
       <button
         onClick={() => setExpanded(!expanded)}
         disabled={!hasContent && !isPartStreaming} // 没内容且没流式时禁用点击（其实这种情况下组件都不渲染了）
