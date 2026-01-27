@@ -94,10 +94,22 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
     if (!isStreaming) return
     
     const scrollInterval = setInterval(() => {
-      // 用户正在滚动、被禁用、或不在底部时，不自动滚动
-      if (isUserScrollingRef.current || suppressScrollRef.current || !isUserAtBottomRef.current) {
+      // 如果用户正在滚动或被禁用，绝对不自动滚
+      if (isUserScrollingRef.current || suppressScrollRef.current) {
         return
       }
+      
+      const shouldForceScroll = (() => {
+        if (!scrollParent) return false
+        const distanceToBottom = scrollParent.scrollHeight - scrollParent.scrollTop - scrollParent.clientHeight
+        // 关键逻辑：
+        // 1. 如果 Virtuoso 认为在底部，那就滚
+        // 2. 如果 Virtuoso 认为不在底部，但实际距离 < 150px，那说明是打字机导致的"假"脱离底部，强制拉回来
+        // 3. 只有当用户真的往上翻了很多（> 150px），才停止滚动
+        return isUserAtBottomRef.current || distanceToBottom < 150
+      })()
+
+      if (!shouldForceScroll) return
       
       // 1. Virtuoso 滚动
       virtuosoRef.current?.scrollToIndex({ 
@@ -106,11 +118,10 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
         behavior: 'auto' 
       })
       
-      // 2. 强制 DOM 滚动补充 (以防 Virtuoso 没到底)
+      // 2. 强制 DOM 滚动补充
       if (scrollParent) {
-        // 允许 10px 误差
         const distanceToBottom = scrollParent.scrollHeight - scrollParent.scrollTop - scrollParent.clientHeight
-        if (distanceToBottom > 10 && distanceToBottom < 300) { // 只有接近底部才强制滚，避免用户看历史时乱跳
+        if (distanceToBottom > 10) { 
            scrollParent.scrollTop = scrollParent.scrollHeight
         }
       }
