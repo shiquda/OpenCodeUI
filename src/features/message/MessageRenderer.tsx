@@ -9,6 +9,7 @@ import {
   AgentPartView,
   SyntheticTextPartView,
   StepFinishPartView,
+  SubtaskPartView,
 } from './parts'
 import type { 
   Message, 
@@ -19,6 +20,7 @@ import type {
   FilePart,
   AgentPart,
   StepFinishPart,
+  SubtaskPart,
 } from '../../types/message'
 
 interface MessageRendererProps {
@@ -189,6 +191,13 @@ function AssistantMessageView({ message }: { message: Message }) {
               <StepFinishPartView 
                 key={part.id} 
                 part={part as StepFinishPart}
+              />
+            )
+          case 'subtask':
+            return (
+              <SubtaskPartView
+                key={part.id}
+                part={part as SubtaskPart}
               />
             )
           default:

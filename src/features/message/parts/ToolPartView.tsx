@@ -3,6 +3,8 @@ import { ChevronDownIcon } from '../../../components/Icons'
 import { ContentBlock } from '../../../components'
 import { getToolIcon } from '../../../utils/toolUtils'
 import { detectLanguage } from '../../../utils/languageUtils'
+import { useChildSessions } from '../../../store'
+import { useRouter } from '../../../hooks/useRouter'
 import type { ToolPart } from '../../../types/message'
 
 interface ToolPartViewProps {
@@ -144,6 +146,11 @@ export const ToolPartView = memo(function ToolPartView({ part, isFirst = false, 
 function ToolBody({ part }: ToolPartViewProps) {
   const { tool, state } = part
   const lowerTool = tool.toLowerCase()
+  
+  // Task 工具特殊渲染（子 agent）
+  if (lowerTool === 'task') {
+    return <TaskToolView part={part} />
+  }
   
   // Todo 特殊渲染
   if (lowerTool.includes('todo')) {
@@ -449,4 +456,131 @@ function extractData(part: ToolPart): ExtractedData {
   }
   
   return result
+}
+
+// ============================================
+// Task Tool View (子 agent 特殊视图)
+// ============================================
+
+function TaskToolView({ part }: ToolPartViewProps) {
+  const { state } = part
+  const { navigateToSession } = useRouter()
+  
+  // 从 input 中提取任务信息
+  const input = state.input as Record<string, unknown> | undefined
+  const description = input?.description as string || 'Subtask'
+  const prompt = input?.prompt as string || ''
+  const agentType = input?.subagent_type as string || 'general'
+  
+  // 获取子 session ID
+  // 1. 优先从 metadata 中读取 (持久化存储，刷新后依然有效)
+  const metadata = state.metadata as Record<string, unknown> | undefined
+  const metadataSessionId = metadata?.sessionId as string | undefined
+  
+  // 2. 只有当 metadata 中没有时，才尝试用 store 查找 (实时创建时使用)
+  const childSessions = useChildSessions(part.sessionID)
+  const storeChildSession = childSessions.length > 0 
+    ? childSessions.sort((a, b) => b.createdAt - a.createdAt)[0]
+    : null
+    
+  const targetSessionId = metadataSessionId || storeChildSession?.id
+  
+  const isActive = state.status === 'running' || state.status === 'pending'
+  const isCompleted = state.status === 'completed'
+  const isError = state.status === 'error'
+  
+  // 处理进入子 session
+  const handleEnter = () => {
+    if (targetSessionId) {
+      navigateToSession(targetSessionId)
+    }
+  }
+  
+  return (
+    <div className="flex flex-col gap-3">
+      {/* 任务信息 */}
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-bg-200/50 border border-border-200/40">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-main-100/10 flex items-center justify-center">
+          <SubagentIcon className="w-4 h-4 text-accent-main-100" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium text-text-100">{agentType}</span>
+            {isActive && (
+              <span className="text-[10px] text-info-100 bg-info-100/10 px-1.5 py-0.5 rounded animate-pulse">
+                Running
+              </span>
+            )}
+            {isCompleted && (
+              <span className="text-[10px] text-success-100 bg-success-100/10 px-1.5 py-0.5 rounded">
+                Done
+              </span>
+            )}
+            {isError && (
+              <span className="text-[10px] text-danger-100 bg-danger-100/10 px-1.5 py-0.5 rounded">
+                Error
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-text-300 mb-2">{description}</p>
+          {prompt && (
+            <p className="text-xs text-text-400 line-clamp-3 whitespace-pre-wrap">{prompt}</p>
+          )}
+        </div>
+      </div>
+      
+      {/* 进入子 session 按钮 */}
+      {targetSessionId && (
+        <button
+          onClick={handleEnter}
+          className="flex items-center justify-center gap-2 py-2 px-4 text-xs font-medium text-accent-main-100 hover:bg-accent-main-100/10 rounded-lg transition-colors border border-accent-main-100/30"
+        >
+          <EnterIcon className="w-3.5 h-3.5" />
+          View subtask session
+        </button>
+      )}
+      
+      {/* 如果完成了，显示 output */}
+      {isCompleted && state.output !== undefined && state.output !== null ? (
+        <ContentBlock
+          label="Result"
+          content={typeof state.output === 'string' ? state.output : JSON.stringify(state.output, null, 2)}
+          defaultCollapsed={true}
+        />
+      ) : null}
+      
+      {/* 错误信息 */}
+      {isError && state.error !== undefined && state.error !== null ? (
+        <div className="p-3 rounded-lg bg-danger-100/10 border border-danger-100/30">
+          <p className="text-xs text-danger-100">
+            {typeof state.error === 'string' ? state.error : String(JSON.stringify(state.error))}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// ============================================
+// Icons for TaskToolView
+// ============================================
+
+function SubagentIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function EnterIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 10l-5 5 5 5" />
+      <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+    </svg>
+  )
 }

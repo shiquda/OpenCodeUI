@@ -113,6 +113,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = subscribeToEvents({
       onSessionCreated: (session) => {
+        // 忽略子 session（有 parentID 的是子 agent 创建的）
+        if (session.parentID) return
+        
         // 检查是否属于当前 directory
         const targetDir = normalizeDirectory(currentDirectoryRef.current)
         const sessionDir = normalizeDirectory(session.directory)

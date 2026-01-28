@@ -1,14 +1,16 @@
 import type { ApiPermissionRequest, PermissionReply } from '../../api'
 import { DiffView } from '../../components/DiffView'
+import { childSessionStore } from '../../store'
 
 interface PermissionDialogProps {
   request: ApiPermissionRequest
   onReply: (reply: PermissionReply) => void
   queueLength?: number  // 队列中的请求数量
   isReplying?: boolean  // 是否正在回复
+  currentSessionId?: string | null  // 当前主 session ID，用于判断是否来自子 agent
 }
 
-export function PermissionDialog({ request, onReply, queueLength = 1, isReplying = false }: PermissionDialogProps) {
+export function PermissionDialog({ request, onReply, queueLength = 1, isReplying = false, currentSessionId }: PermissionDialogProps) {
   // 从 metadata 中提取 diff 信息
   const metadata = request.metadata
   const diff = metadata?.diff as string | undefined
@@ -26,6 +28,12 @@ export function PermissionDialog({ request, onReply, queueLength = 1, isReplying
   
   // 判断是否是文件编辑类权限
   const isFileEdit = request.permission === 'edit' || request.permission === 'write'
+
+  // 判断是否来自子 session
+  const isFromChildSession = currentSessionId && request.sessionID !== currentSessionId
+  const childSessionInfo = isFromChildSession 
+    ? childSessionStore.getSessionInfo(request.sessionID) 
+    : null
 
   return (
     <div className="absolute bottom-0 left-0 right-0 z-[10]">
@@ -46,6 +54,16 @@ export function PermissionDialog({ request, onReply, queueLength = 1, isReplying
                 )}
               </div>
             </div>
+
+            {/* Child session indicator */}
+            {isFromChildSession && (
+              <div className="px-4 pb-2 flex items-center gap-2">
+                <SubagentIcon className="w-3.5 h-3.5 text-info-100" />
+                <span className="text-xs text-info-100">
+                  From subtask: {childSessionInfo?.title || 'Subtask'}
+                </span>
+              </div>
+            )}
 
             <div className="border-t border-border-300/30" />
 
@@ -165,6 +183,17 @@ function ReturnIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-text-500">
       <path d="M14.4999 7C14.4987 8.06051 14.0769 9.07725 13.3271 9.82715C12.5772 10.577 11.5604 10.9988 10.4999 11H3.20678L5.35366 13.1462C5.44748 13.2401 5.50018 13.3673 5.50018 13.5C5.50018 13.6327 5.44748 13.7599 5.35366 13.8538C5.25984 13.9476 5.13259 14.0003 4.99991 14.0003C4.86722 14.0003 4.73998 13.9476 4.64615 13.8538L1.64615 10.8538C1.59967 10.8073 1.56279 10.7522 1.53763 10.6915C1.51246 10.6308 1.49951 10.5657 1.49951 10.5C1.49951 10.4343 1.51246 10.3692 1.53763 10.3085C1.56279 10.2478 1.59967 10.1927 1.64615 10.1462L4.64615 7.14625C4.73998 7.05243 4.86722 6.99972 4.99991 6.99972C5.13259 6.99972 5.25984 7.05243 5.35366 7.14625C5.44748 7.24007 5.50018 7.36732 5.50018 7.5C5.50018 7.63268 5.44748 7.75993 5.35366 7.85375L3.20678 10H10.4999C11.2956 10 12.0586 9.68393 12.6212 9.12132C13.1838 8.55871 13.4999 7.79565 13.4999 7C13.4999 6.20435 13.1838 5.44129 12.6212 4.87868C12.0586 4.31607 11.2956 4 10.4999 4H4.99991C4.8673 4 4.74012 3.94732 4.64635 3.85355C4.55258 3.75979 4.49991 3.63261 4.49991 3.5C4.49991 3.36739 4.55258 3.24021 4.64635 3.14645C4.74012 3.05268 4.8673 3 4.99991 3H10.4999C11.5604 3.00116 12.5772 3.42296 13.3271 4.17285C14.0769 4.92275 14.4987 5.93949 14.4999 7Z" />
+    </svg>
+  )
+}
+
+function SubagentIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   )
 }

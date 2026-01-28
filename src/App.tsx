@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Header, InputBox, PermissionDialog, QuestionDialog, Sidebar, ChatArea, type ChatAreaHandle } from './features/chat'
-import { useMessageStore, messageStore } from './store'
+import { useMessageStore, messageStore, useSessionFamily } from './store'
 import { useSessionManager, useGlobalEvents } from './hooks'
 import { usePermissions, useTheme, useModels, useRouter, usePermissionHandler, useMessageAnimation, useDirectory, useSessionContext } from './hooks'
 import { 
@@ -65,6 +65,9 @@ function App() {
   const { sessionId: routeSessionId, navigateToSession, navigateHome } = useRouter()
   const { currentDirectory, sidebarExpanded, setSidebarExpanded } = useDirectory()
   const { createSession } = useSessionContext()
+  
+  // 获取当前 session 及其所有子 session 的 ID 列表（用于权限轮询）
+  const sessionFamily = useSessionFamily(routeSessionId)
 
   // Session Manager (加载、undo/redo)
   const {
@@ -140,18 +143,19 @@ function App() {
   // Effects
   // ============================================
 
-  // 轮询 pending 权限请求
+  // 轮询 pending 权限请求（包括子 session）
   useEffect(() => {
     if (!routeSessionId || !isStreaming) return
     
-    refreshPendingRequests(routeSessionId, currentDirectory)
+    // 使用 sessionFamily 轮询所有相关 session 的权限
+    refreshPendingRequests(sessionFamily, currentDirectory)
     
     const interval = setInterval(() => {
-      refreshPendingRequests(routeSessionId, currentDirectory)
+      refreshPendingRequests(sessionFamily, currentDirectory)
     }, 5000)
     
     return () => clearInterval(interval)
-  }, [routeSessionId, isStreaming, currentDirectory, refreshPendingRequests])
+  }, [routeSessionId, isStreaming, currentDirectory, sessionFamily, refreshPendingRequests])
 
   // Model 自动选择
   const handleModelChange = useCallback((modelKey: string, _model: ModelInfo) => {
@@ -468,6 +472,7 @@ function App() {
             onReply={(reply) => handlePermissionReply(pendingPermissionRequests[0].id, reply, currentDirectory)}
             queueLength={pendingPermissionRequests.length}
             isReplying={isReplying}
+            currentSessionId={routeSessionId}
           />
         )}
 

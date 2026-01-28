@@ -26,8 +26,8 @@ export interface UsePermissionHandlerResult {
   handlePermissionReply: (requestId: string, reply: PermissionReply, directory?: string) => Promise<boolean>
   handleQuestionReply: (requestId: string, answers: QuestionAnswer[], directory?: string) => Promise<boolean>
   handleQuestionReject: (requestId: string, directory?: string) => Promise<boolean>
-  // Refresh (poll for pending requests)
-  refreshPendingRequests: (sessionId?: string, directory?: string) => Promise<void>
+  // Refresh (poll for pending requests) - 支持单个或多个 session IDs
+  refreshPendingRequests: (sessionIds?: string | string[], directory?: string) => Promise<void>
   // Reset
   resetPendingRequests: () => void
   // Loading state
@@ -157,17 +157,36 @@ export function usePermissionHandler(): UsePermissionHandlerResult {
   }, [])
 
   // 主动轮询获取 pending 请求（用于 SSE 可能丢失事件的情况）
-  const refreshPendingRequests = useCallback(async (sessionId?: string, directory?: string) => {
+  // 支持传入多个 sessionIds（包括子 session）
+  const refreshPendingRequests = useCallback(async (
+    sessionIds?: string | string[], 
+    directory?: string
+  ) => {
     try {
-      const [permissions, questions] = await Promise.all([
-        getPendingPermissions(sessionId, directory),
-        getPendingQuestions(sessionId, directory),
-      ])
+      // 规范化为数组
+      const ids = sessionIds 
+        ? (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
+        : []
+      
+      // 并行获取所有 session 的权限请求
+      const results = await Promise.all(
+        ids.map(async (sessionId) => {
+          const [permissions, questions] = await Promise.all([
+            getPendingPermissions(sessionId, directory).catch(() => []),
+            getPendingQuestions(sessionId, directory).catch(() => []),
+          ])
+          return { permissions, questions }
+        })
+      )
+      
+      // 合并所有结果
+      const allPermissions = results.flatMap(r => r.permissions)
+      const allQuestions = results.flatMap(r => r.questions)
       
       // 合并而不是替换，避免丢失刚收到的 SSE 事件
       setPendingPermissionRequests(prev => {
         const existingIds = new Set(prev.map(r => r.id))
-        const newRequests = permissions.filter(r => !existingIds.has(r.id))
+        const newRequests = allPermissions.filter(r => !existingIds.has(r.id))
         if (newRequests.length > 0) {
           console.log(`[Permission] Found ${newRequests.length} new pending requests`)
           return [...prev, ...newRequests]
@@ -177,7 +196,7 @@ export function usePermissionHandler(): UsePermissionHandlerResult {
       
       setPendingQuestionRequests(prev => {
         const existingIds = new Set(prev.map(r => r.id))
-        const newRequests = questions.filter(r => !existingIds.has(r.id))
+        const newRequests = allQuestions.filter(r => !existingIds.has(r.id))
         if (newRequests.length > 0) {
           console.log(`[Question] Found ${newRequests.length} new pending requests`)
           return [...prev, ...newRequests]
