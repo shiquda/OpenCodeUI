@@ -5,8 +5,31 @@
 
 import { get, post, patch, del } from './http'
 import { formatPathForApi } from '../utils/directoryUtils'
-import type { ApiSession, SessionListParams } from './types'
+import type { ApiSession, SessionListParams, FileDiff } from './types'
 
+// ... existing code ...
+
+/**
+ * GET /session/{sessionID}/diff - 获取 session 的 diff
+ */
+export async function getSessionDiff(
+  sessionId: string, 
+  directory?: string,
+  messageId?: string
+): Promise<FileDiff[]> {
+  const params: Record<string, string> = {}
+  const formattedDir = formatPathForApi(directory)
+  if (formattedDir) {
+    params.directory = formattedDir
+  }
+  if (messageId) {
+    params.messageID = messageId
+  }
+  return get<FileDiff[]>(`/session/${sessionId}/diff`, params)
+}
+
+// ============================================
+// Session Actions
 // ============================================
 // Session CRUD
 // ============================================

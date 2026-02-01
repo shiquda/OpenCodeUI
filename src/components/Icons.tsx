@@ -498,4 +498,20 @@ export const UsersIcon = (props: IconProps) => (
   </DefaultIcon>
 )
 
+export const GitCommitIcon = (props: IconProps) => (
+  <DefaultIcon {...props}>
+    <circle cx="12" cy="12" r="3" />
+    <line x1="3" y1="12" x2="9" y2="12" />
+    <line x1="15" y1="12" x2="21" y2="12" />
+  </DefaultIcon>
+)
+
+export const GitDiffIcon = (props: IconProps) => (
+  <DefaultIcon {...props}>
+    <path d="M12 3v14" />
+    <path d="M5 10h14" />
+    <path d="M5 21h14" />
+  </DefaultIcon>
+)
+
 

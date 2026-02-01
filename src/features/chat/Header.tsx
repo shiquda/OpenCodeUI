@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { ComposeIcon, CogIcon, MoreHorizontalIcon, TeachIcon, SidebarIcon, MaximizeIcon, MinimizeIcon, SunIcon, MoonIcon, SystemIcon, ShareIcon } from '../../components/Icons'
+import { ComposeIcon, CogIcon, MoreHorizontalIcon, TeachIcon, SidebarIcon, MaximizeIcon, MinimizeIcon, SunIcon, MoonIcon, SystemIcon, ShareIcon, GitCommitIcon } from '../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton } from '../../components/ui'
 import { ModelSelector } from './ModelSelector'
 import { SettingsDialog } from '../settings/SettingsDialog'
 import { ShareDialog } from './ShareDialog'
+import { MultiFileDiffModal } from '../../components/MultiFileDiffModal'
 import { useMessageStore } from '../../store'
 import { useSessionStats, formatTokens, formatCost } from '../../hooks'
 import type { ThemeMode } from '../../hooks'
@@ -34,10 +35,11 @@ export function Header({
   isWideMode,
   onToggleWideMode,
 }: HeaderProps) {
-  const { shareUrl, messages } = useMessageStore()
+  const { shareUrl, messages, sessionId } = useMessageStore()
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [diffModalOpen, setDiffModalOpen] = useState(false)
   const settingsTriggerRef = useRef<HTMLButtonElement>(null)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
 
@@ -105,6 +107,17 @@ export function Header({
             className="hover:bg-bg-200/50 hidden sm:flex text-text-400 hover:text-text-100"
           >
             {isWideMode ? <MinimizeIcon size={18} /> : <MaximizeIcon size={18} />}
+          </IconButton>
+        )}
+
+        {/* Changes Button */}
+        {hasMessages && sessionId && (
+          <IconButton
+            aria-label="View changes"
+            onClick={() => setDiffModalOpen(true)}
+            className="hover:bg-bg-200/50 text-text-400 hover:text-text-100"
+          >
+            <GitCommitIcon size={18} />
           </IconButton>
         )}
 
@@ -211,6 +224,14 @@ export function Header({
         isOpen={shareDialogOpen} 
         onClose={() => setShareDialogOpen(false)} 
       />
+
+      {sessionId && (
+        <MultiFileDiffModal 
+          isOpen={diffModalOpen}
+          onClose={() => setDiffModalOpen(false)}
+          sessionId={sessionId}
+        />
+      )}
     </div>
   )
 }
