@@ -172,9 +172,9 @@ export const RightPanel = memo(function RightPanel() {
         width: rightPanelOpen ? 'var(--panel-width)' : 0 
       } as React.CSSProperties}
       className={`
-        relative h-full flex flex-col bg-bg-50/50 backdrop-blur-xl
+        relative h-full flex flex-col bg-bg-100
         overflow-hidden
-        ${isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)]'}
+        ${isResizing ? 'transition-none' : 'transition-[width] duration-200 ease-out'}
         ${rightPanelOpen ? 'border-l border-border-200/50' : ''}
       `}
     >
@@ -189,8 +189,8 @@ export const RightPanel = memo(function RightPanel() {
         <div
           className={`
             absolute top-0 left-0 bottom-0 w-2 cursor-col-resize z-50
-            hover:bg-accent-main-100/50 transition-colors
-            ${isResizing ? 'bg-accent-main-100' : 'bg-transparent'}
+            hover:bg-accent-main-100/30 active:bg-accent-main-100/50 transition-colors
+            ${isResizing ? 'bg-accent-main-100/50' : 'bg-transparent'}
           `}
           onMouseDown={startResizing}
         />

@@ -459,6 +459,214 @@ textarea.custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: hsl(var(--border-300) / 0.7);
 }
 
+/* ============================================
+ * Panel Scrollbar - 面板统一滚动条样式
+ * ============================================
+ * 用于面板内容区域，支持水平和垂直滚动
+ * 特点：细滚动条、悬浮时显示、不占用布局空间
+ */
+.panel-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-300) / 0.3) transparent;
+  overflow: auto;
+}
+
+/* 尝试使用 overlay 滚动条（不占用空间） */
+@supports (overflow: overlay) {
+  .panel-scrollbar {
+    overflow: overlay;
+  }
+}
+
+.panel-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+
+.panel-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border-300) / 0.3);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.panel-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--border-300) / 0.6);
+}
+
+.panel-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 仅垂直滚动的变体 */
+.panel-scrollbar-y {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-300) / 0.3) transparent;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+@supports (overflow-y: overlay) {
+  .panel-scrollbar-y {
+    overflow-y: overlay;
+  }
+}
+
+.panel-scrollbar-y::-webkit-scrollbar {
+  width: 8px;
+  background: transparent;
+}
+
+.panel-scrollbar-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-scrollbar-y::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border-300) / 0.3);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.panel-scrollbar-y::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--border-300) / 0.6);
+}
+
+/* 仅水平滚动的变体 */
+.panel-scrollbar-x {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-300) / 0.3) transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+@supports (overflow-x: overlay) {
+  .panel-scrollbar-x {
+    overflow-x: overlay;
+  }
+}
+
+.panel-scrollbar-x::-webkit-scrollbar {
+  height: 6px;
+  background: transparent;
+}
+
+.panel-scrollbar-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border-300) / 0.3);
+  border-radius: 99px;
+}
+
+.panel-scrollbar-x::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--border-300) / 0.6);
+}
+
+/* Tabs 水平滚动 - 更薄的滚动条 */
+.tabs-scrollbar {
+  scrollbar-width: none; /* Firefox 默认隐藏 */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tabs-scrollbar::-webkit-scrollbar {
+  height: 3px;
+  background: transparent;
+}
+
+.tabs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabs-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 99px;
+  transition: background-color 0.2s;
+}
+
+.tabs-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border-300) / 0.4);
+}
+
+.tabs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--border-300) / 0.6);
+}
+
+/* ============================================
+ * Panel Unified Styles - 面板统一样式
+ * ============================================
+ * 用于 RightPanel 和 BottomPanel 的统一视觉规范
+ */
+
+/* 面板统一过渡效果 */
+.panel-transition {
+  transition-property: width, height, opacity, transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 面板统一阴影（可选，用于浮动状态） */
+.panel-shadow {
+  box-shadow: 
+    0 0 0 1px hsl(var(--border-200) / 0.5),
+    0 4px 12px hsl(0 0% 0% / 0.08);
+}
+
+/* ============================================
+ * Mobile Responsive - 移动端适配
+ * ============================================
+ */
+
+/* 移动端面板覆盖层 */
+@media (max-width: 768px) {
+  /* 面板默认隐藏 */
+  .panel-mobile-hide {
+    display: none;
+  }
+  
+  /* 面板全屏覆盖模式 */
+  .panel-mobile-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 100;
+    border: none !important;
+  }
+  
+  /* 移动端面板头部增大点击区域 */
+  .panel-mobile-header {
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+  
+  /* 移动端 resize handle 更大的触摸区域 */
+  .panel-resize-handle-mobile {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* 平板适配 */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 面板最小宽度调整 */
+  .panel-tablet-min-w {
+    min-width: 280px;
+  }
+  
+  /* 面板最大宽度调整 */
+  .panel-tablet-max-w {
+    max-width: 50vw;
+  }
+}
+
 /* Message animations */
 @keyframes message-enter {
   from {

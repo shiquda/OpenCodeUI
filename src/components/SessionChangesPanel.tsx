@@ -136,7 +136,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
       </div>
       
       {/* File list */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 overflow-y-auto panel-scrollbar-y">
         {diffs.map((diff) => {
           const isExpanded = expandedFiles.has(diff.file)
           const language = detectLanguage(diff.file) || 'text'

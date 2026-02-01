@@ -179,7 +179,7 @@ export const PanelContainer = memo(function PanelContainer({
       {/* Header with Tabs */}
       <div className="flex items-center justify-between px-2 py-1 shrink-0 border-b border-border-200/30 h-10">
         {/* Tabs Container - 水平滚动 */}
-        <div ref={tabsContainerRef} className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto scrollbar-none">
+        <div ref={tabsContainerRef} className="flex items-center gap-0.5 flex-1 min-w-0 tabs-scrollbar">
           {tabs.map((tab) => (
             <PanelTabButton
               key={tab.id}
@@ -361,8 +361,9 @@ const PanelTabButton = memo(function PanelTabButton({
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={`
-        group flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-all shrink-0
+        group flex items-center gap-1.5 px-2 py-1 rounded-md text-xs shrink-0
         border border-transparent cursor-pointer select-none
+        transition-all duration-150 ease-out
         ${isActive 
           ? 'bg-bg-000 text-text-100 shadow-sm border-border-200/50' 
           : 'text-text-300 hover:text-text-200 hover:bg-bg-200/50'
@@ -396,7 +397,8 @@ const PanelTabButton = memo(function PanelTabButton({
           onDragStart={(e) => e.stopPropagation()}
           draggable={false}
           className={`
-            p-1 -mr-0.5 rounded transition-all shrink-0
+            p-1 -mr-0.5 rounded shrink-0
+            transition-all duration-150 ease-out
             hover:bg-danger-100/20 text-text-400 hover:text-danger-100
             ${isActive ? '' : 'opacity-0 group-hover:opacity-100'}
           `}

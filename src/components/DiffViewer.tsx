@@ -50,7 +50,7 @@ export const DiffViewer = memo(function DiffViewer({
   isResizing = false,
 }: DiffViewerProps) {
   return (
-    <div className="flex-1 overflow-auto custom-scrollbar font-mono text-[13px] leading-6" style={{ contain: 'content' }}>
+    <div className="flex-1 overflow-auto panel-scrollbar font-mono text-[13px] leading-6" style={{ contain: 'content' }}>
       {viewMode === 'split' ? (
         <SplitDiffView before={before} after={after} isResizing={isResizing} />
       ) : (

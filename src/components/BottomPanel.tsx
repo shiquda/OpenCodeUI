@@ -235,7 +235,7 @@ export const BottomPanel = memo(function BottomPanel({ directory }: BottomPanelP
       <div
         className={`
           absolute top-0 left-0 right-0 h-2 cursor-row-resize z-50
-          hover:bg-accent-main-100/30 transition-colors -translate-y-1/2
+          hover:bg-accent-main-100/30 active:bg-accent-main-100/50 transition-colors -translate-y-1/2
           ${isResizing ? 'bg-accent-main-100/50' : 'bg-transparent'}
         `}
         onMouseDown={handleResizeStart}

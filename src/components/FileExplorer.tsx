@@ -196,7 +196,7 @@ export const FileExplorer = memo(function FileExplorer({
         </div>
 
         {/* Tree Content */}
-        <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="flex-1 overflow-auto panel-scrollbar-y">
           {isLoading && tree.length === 0 ? (
             <div className="flex items-center justify-center h-20 text-text-400 text-xs">
               Loading...
@@ -416,7 +416,7 @@ function FilePreview({ path, content, isLoading, error, onClose, isResizing = fa
       </div>
 
       {/* Preview Content */}
-      <div ref={scrollRef} className="flex-1 overflow-auto custom-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-auto panel-scrollbar">
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-text-400 text-xs">
             Loading...
@@ -693,7 +693,7 @@ function VirtualCodePreview({ code, language, lines, isResizing }: { code: strin
   return (
     <div 
       ref={containerRef}
-      className="h-full overflow-auto custom-scrollbar relative"
+      className="h-full overflow-auto panel-scrollbar relative"
       onScroll={handleScroll}
       style={{ contain: 'strict' }}
     >
