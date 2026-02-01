@@ -5,6 +5,7 @@
 
 import { memo, useMemo, useRef } from 'react'
 import { diffLines, diffWords } from 'diff'
+import { useSyntaxHighlight } from '../hooks/useSyntaxHighlight'
 
 // ============================================
 // Types
@@ -46,17 +47,33 @@ interface UnifiedLine extends DiffLine {
 export const DiffViewer = memo(function DiffViewer({
   before,
   after,
+  language = 'text',
   viewMode = 'split',
   isResizing = false,
 }: DiffViewerProps) {
   return (
     <div className="flex-1 overflow-auto panel-scrollbar font-mono text-[13px] leading-6" style={{ contain: 'content' }}>
       {viewMode === 'split' ? (
-        <SplitDiffView before={before} after={after} isResizing={isResizing} />
+        <SplitDiffView before={before} after={after} language={language} isResizing={isResizing} />
       ) : (
-        <UnifiedDiffView before={before} after={after} isResizing={isResizing} />
+        <UnifiedDiffView before={before} after={after} language={language} isResizing={isResizing} />
       )}
     </div>
+  )
+})
+
+// ============================================
+// Token Renderer
+// ============================================
+
+const ShikiLine = memo(function ShikiLine({ tokens }: { tokens: any[] }) {
+  if (!tokens || tokens.length === 0) return null
+  return (
+    <>
+      {tokens.map((token, i) => (
+        <span key={i} style={{ color: token.color }}>{token.content}</span>
+      ))}
+    </>
   )
 })
 
@@ -64,12 +81,27 @@ export const DiffViewer = memo(function DiffViewer({
 // Split Diff View
 // ============================================
 
-const SplitDiffView = memo(function SplitDiffView({ before, after, isResizing }: { before: string, after: string, isResizing: boolean }) {
+const SplitDiffView = memo(function SplitDiffView({ 
+  before, 
+  after, 
+  language,
+  isResizing 
+}: { 
+  before: string, 
+  after: string, 
+  language: string,
+  isResizing: boolean 
+}) {
   // 缓存计算结果
   const cachedRef = useRef<PairedLine[] | null>(null)
   
+  // Syntax Highlighting
+  // 仅在非 resizing 时启用高亮，且仅当 language 有效时
+  const shouldHighlight = !isResizing && language !== 'text'
+  const { output: beforeTokens } = useSyntaxHighlight(before, { lang: language, mode: 'tokens', enabled: shouldHighlight })
+  const { output: afterTokens } = useSyntaxHighlight(after, { lang: language, mode: 'tokens', enabled: shouldHighlight })
+  
   const pairedLines = useMemo(() => {
-    // resize 时使用缓存
     if (isResizing && cachedRef.current) {
       return cachedRef.current
     }
@@ -80,6 +112,27 @@ const SplitDiffView = memo(function SplitDiffView({ before, after, isResizing }:
 
   if (pairedLines.length === 0) {
     return <div className="p-8 text-text-400 text-sm text-center">No changes</div>
+  }
+
+  // 渲染行内容的辅助函数
+  const renderLineContent = (line: DiffLine, tokensArray: any[][] | null) => {
+    // 1. 优先展示行内 Diff 高亮 (modified lines)
+    if (line.highlightedContent) {
+      return (
+        <span 
+          className="text-text-100"
+          dangerouslySetInnerHTML={{ __html: line.highlightedContent }} 
+        />
+      )
+    }
+    
+    // 2. 展示语法高亮 (context, whole add/delete)
+    if (tokensArray && line.lineNo && tokensArray[line.lineNo - 1]) {
+      return <ShikiLine tokens={tokensArray[line.lineNo - 1]} />
+    }
+    
+    // 3. 兜底纯文本 (loading state or resizing)
+    return <span className="text-text-100">{line.content}</span>
   }
 
   return (
@@ -98,13 +151,11 @@ const SplitDiffView = memo(function SplitDiffView({ before, after, isResizing }:
               {pair.left.type === 'delete' && (
                 <span className="text-danger-100 select-none mr-1 inline-block w-3">−</span>
               )}
-              {pair.left.type !== 'empty' && (
-                <span 
-                  className="text-text-100"
-                  dangerouslySetInnerHTML={{ __html: pair.left.highlightedContent || escapeHtml(pair.left.content) }} 
-                />
+              {pair.left.type !== 'empty' ? (
+                renderLineContent(pair.left, beforeTokens as any[][])
+              ) : (
+                <span>&nbsp;</span>
               )}
-              {pair.left.type === 'empty' && <span>&nbsp;</span>}
             </div>
           </div>
         ))}
@@ -124,13 +175,11 @@ const SplitDiffView = memo(function SplitDiffView({ before, after, isResizing }:
               {pair.right.type === 'add' && (
                 <span className="text-success-100 select-none mr-1 inline-block w-3">+</span>
               )}
-              {pair.right.type !== 'empty' && (
-                <span 
-                  className="text-text-100"
-                  dangerouslySetInnerHTML={{ __html: pair.right.highlightedContent || escapeHtml(pair.right.content) }} 
-                />
+              {pair.right.type !== 'empty' ? (
+                renderLineContent(pair.right, afterTokens as any[][])
+              ) : (
+                <span>&nbsp;</span>
               )}
-              {pair.right.type === 'empty' && <span>&nbsp;</span>}
             </div>
           </div>
         ))}
@@ -143,12 +192,24 @@ const SplitDiffView = memo(function SplitDiffView({ before, after, isResizing }:
 // Unified Diff View
 // ============================================
 
-const UnifiedDiffView = memo(function UnifiedDiffView({ before, after, isResizing }: { before: string, after: string, isResizing: boolean }) {
-  // 缓存计算结果
+const UnifiedDiffView = memo(function UnifiedDiffView({ 
+  before, 
+  after, 
+  language,
+  isResizing 
+}: { 
+  before: string, 
+  after: string, 
+  language: string,
+  isResizing: boolean 
+}) {
   const cachedRef = useRef<UnifiedLine[] | null>(null)
   
+  const shouldHighlight = !isResizing && language !== 'text'
+  const { output: beforeTokens } = useSyntaxHighlight(before, { lang: language, mode: 'tokens', enabled: shouldHighlight })
+  const { output: afterTokens } = useSyntaxHighlight(after, { lang: language, mode: 'tokens', enabled: shouldHighlight })
+  
   const lines = useMemo(() => {
-    // resize 时使用缓存
     if (isResizing && cachedRef.current) {
       return cachedRef.current
     }
@@ -159,6 +220,35 @@ const UnifiedDiffView = memo(function UnifiedDiffView({ before, after, isResizin
 
   if (lines.length === 0) {
     return <div className="p-8 text-text-400 text-sm text-center">No changes</div>
+  }
+
+  const renderLineContent = (line: UnifiedLine) => {
+    if (line.highlightedContent) {
+      return (
+        <span 
+          className="text-text-100"
+          dangerouslySetInnerHTML={{ __html: line.highlightedContent }} 
+        />
+      )
+    }
+    
+    // Unified view needs to pick tokens from either before or after
+    let tokens = null
+    let lineNo = null
+    
+    if (line.type === 'delete' && line.oldLineNo) {
+      tokens = beforeTokens
+      lineNo = line.oldLineNo
+    } else if ((line.type === 'add' || line.type === 'context') && line.newLineNo) {
+      tokens = afterTokens
+      lineNo = line.newLineNo
+    }
+    
+    if (tokens && lineNo && (tokens as any[][])[lineNo - 1]) {
+      return <ShikiLine tokens={(tokens as any[][])[lineNo - 1]} />
+    }
+    
+    return <span className="text-text-100">{line.content}</span>
   }
 
   return (
@@ -181,10 +271,7 @@ const UnifiedDiffView = memo(function UnifiedDiffView({ before, after, isResizin
             {line.type === 'delete' && (
               <span className="text-danger-100 select-none mr-1 inline-block w-3">−</span>
             )}
-            <span 
-              className="text-text-100"
-              dangerouslySetInnerHTML={{ __html: line.highlightedContent || escapeHtml(line.content) }} 
-            />
+            {renderLineContent(line)}
           </div>
         </div>
       ))}
