@@ -288,7 +288,7 @@ export const BottomPanel = memo(function BottomPanel({ directory }: BottomPanelP
           flex flex-col bg-bg-100 
           ${isMobile 
             ? `fixed bottom-0 left-0 right-0 z-[100] h-[40vh] shadow-2xl ${animationClass} rounded-t-xl overflow-hidden border-t border-border-200` 
-            : 'relative'
+            : `relative ${isResizing ? 'transition-none' : 'transition-[height] duration-200 ease-out'}`
           }
         `}
         style={!isMobile ? { 
