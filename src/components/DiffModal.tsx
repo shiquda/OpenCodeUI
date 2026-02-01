@@ -353,9 +353,11 @@ function computePairedLines(before: string, after: string): PairedLine[] {
           let leftHighlight: string | undefined
           let rightHighlight: string | undefined
           if (oldLine !== undefined && newLine !== undefined) {
-            const wordDiff = computeWordDiff(oldLine, newLine)
-            leftHighlight = wordDiff.left
-            rightHighlight = wordDiff.right
+             const wordDiff = computeWordDiff(oldLine, newLine)
+             if (!isTooFragmented(wordDiff.changes)) {
+               leftHighlight = wordDiff.left
+               rightHighlight = wordDiff.right
+             }
           }
           
           result.push({
@@ -408,6 +410,25 @@ function computePairedLines(before: string, after: string): PairedLine[] {
   return result
 }
 
+function isTooFragmented(changes: any[]): boolean {
+  let commonLength = 0
+  let totalLength = 0
+  
+  for (const change of changes) {
+    totalLength += change.value.length
+    if (!change.added && !change.removed) {
+      commonLength += change.value.length
+    }
+  }
+  
+  // 如果少于 40% 的内容是相同的，说明这行改动很大，直接整行高亮更好
+  if (totalLength > 10 && commonLength / totalLength < 0.4) {
+    return true
+  }
+  
+  return false
+}
+
 function computeUnifiedLines(before: string, after: string): UnifiedLine[] {
   const changes = diffLines(before, after)
   const result: UnifiedLine[] = []
@@ -456,26 +477,54 @@ function computeUnifiedLines(before: string, after: string): UnifiedLine[] {
   return result
 }
 
-function computeWordDiff(oldLine: string, newLine: string): { left: string; right: string } {
+function computeWordDiff(oldLine: string, newLine: string): { left: string; right: string; changes: any[] } {
   const changes = diffWords(oldLine, newLine)
   
+  // 合并逻辑：将相邻的同类变化或仅隔着空格的变化合并，避免碎片化
+  const mergedChanges = []
+  for (let i = 0; i < changes.length; i++) {
+    const current = changes[i]
+    const prev = mergedChanges.length > 0 ? mergedChanges[mergedChanges.length - 1] : null
+    
+    // 如果当前是纯空格，且前后都是同类变化，则尝试合并
+    if (prev && !current.added && !current.removed && /^\s*$/.test(current.value)) {
+       const next = i + 1 < changes.length ? changes[i + 1] : null
+       if (prev.removed && next && next.removed) {
+         prev.value += current.value
+         continue 
+       }
+       if (prev.added && next && next.added) {
+         prev.value += current.value
+         continue
+       }
+    }
+    
+    // 尝试直接合并连续的同类
+    if (prev && ((prev.added && current.added) || (prev.removed && current.removed))) {
+      prev.value += current.value
+    } else {
+      mergedChanges.push({...current}) 
+    }
+  }
+
   let left = ''
   let right = ''
   
-  for (const change of changes) {
+  for (const change of mergedChanges) {
     const escaped = escapeHtml(change.value)
     
+    // 移除圆角和内边距，使用纯色背景
     if (change.removed) {
-      left += `<mark class="bg-danger-100/40 text-inherit rounded-sm px-0.5">${escaped}</mark>`
+      left += `<span class="bg-danger-100/30">${escaped}</span>`
     } else if (change.added) {
-      right += `<mark class="bg-success-100/40 text-inherit rounded-sm px-0.5">${escaped}</mark>`
+      right += `<span class="bg-success-100/30">${escaped}</span>`
     } else {
       left += escaped
       right += escaped
     }
   }
   
-  return { left, right }
+  return { left, right, changes: mergedChanges }
 }
 
 function extractContentFromUnifiedDiff(diff: string): { before: string, after: string } {
