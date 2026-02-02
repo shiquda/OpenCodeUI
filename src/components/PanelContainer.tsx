@@ -13,6 +13,7 @@ import {
   FolderIcon,
   GitCommitIcon,
   PlugIcon,
+  TeachIcon,
 } from './Icons'
 import { 
   layoutStore, 
@@ -39,6 +40,7 @@ const TAB_ICONS: Record<PanelTabType, React.ReactNode> = {
   files: <FolderIcon size={12} />,
   changes: <GitCommitIcon size={12} />,
   mcp: <PlugIcon size={12} />,
+  skill: <TeachIcon size={12} />,
 }
 
 // Tab 显示名称
@@ -50,6 +52,7 @@ function getTabLabel(tab: PanelTab): string {
     case 'files': return 'Files'
     case 'changes': return 'Changes'
     case 'mcp': return 'MCP'
+    case 'skill': return 'Skills'
     default: return 'Tab'
   }
 }
@@ -342,6 +345,18 @@ export const PanelContainer = memo(function PanelContainer({
               <PlugIcon size={12} />
             </span>
             MCP Servers
+          </button>
+          <button
+            onClick={() => {
+              layoutStore.addSkillTab(position)
+              setAddMenuPos(null)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs text-text-200 hover:bg-bg-200 hover:text-text-100 transition-colors"
+          >
+            <span className="opacity-60 shrink-0">
+              <TeachIcon size={12} />
+            </span>
+            Skills
           </button>
         </div>,
         document.body

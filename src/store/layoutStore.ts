@@ -6,7 +6,7 @@
 export type PanelPosition = 'bottom' | 'right'
 
 // 面板内容类型
-export type PanelTabType = 'terminal' | 'files' | 'changes' | 'mcp'
+export type PanelTabType = 'terminal' | 'files' | 'changes' | 'mcp' | 'skill'
 
 // 统一的面板标签
 export interface PanelTab {
@@ -212,6 +212,26 @@ class LayoutStore {
       return existing.id
     }
     return this.addTab({ type: 'mcp', position, id: 'mcp' })
+  }
+
+  // 添加 Skill 标签
+  addSkillTab(position: PanelPosition) {
+    // 检查该位置是否已有 skill tab
+    const existing = this.state.panelTabs.find(
+      t => t.type === 'skill' && t.position === position
+    )
+    if (existing) {
+      // 已存在，直接激活
+      this.setActiveTab(position, existing.id)
+      if (position === 'bottom') {
+        this.state.bottomPanelOpen = true
+      } else {
+        this.state.rightPanelOpen = true
+      }
+      this.notify()
+      return existing.id
+    }
+    return this.addTab({ type: 'skill', position, id: 'skill' })
   }
 
   // 移除 tab
