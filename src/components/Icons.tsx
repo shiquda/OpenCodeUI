@@ -30,6 +30,12 @@ export const ChevronDownIcon = (props: IconProps) => (
   </DefaultIcon>
 )
 
+export const ChevronUpIcon = (props: IconProps) => (
+  <DefaultIcon {...props}>
+    <path d="m18 15-6-6-6 6" />
+  </DefaultIcon>
+)
+
 export const NewChatIcon = (props: IconProps) => (
   <DefaultIcon {...props}>
     <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />

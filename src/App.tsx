@@ -150,6 +150,10 @@ function App() {
         onClose={() => setSidebarExpanded(false)}
         contextLimit={currentModel?.contextLimit}
         onOpenSettings={openSettings}
+        themeMode={themeMode}
+        onThemeChange={setThemeWithAnimation}
+        isWideMode={isWideMode}
+        onToggleWideMode={toggleWideMode}
       />
 
       {/* Main Content Area: Chat Column + Right Panel */}
