@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { SessionList } from '../../sessions'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { ShareDialog } from '../ShareDialog'
 import { 
   SidebarIcon, 
   FolderIcon, 
@@ -521,6 +522,7 @@ function SidebarFooter({
 }: SidebarFooterProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -683,7 +685,7 @@ function SidebarFooter({
         )}
 
         <button
-          onClick={closeMenu}
+          onClick={() => { closeMenu(); setShareDialogOpen(true); }}
           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
         >
           <ShareIcon size={14} />
@@ -756,6 +758,7 @@ function SidebarFooter({
       </div>
       
       {floatingMenu}
+      <ShareDialog isOpen={shareDialogOpen} onClose={() => setShareDialogOpen(false)} />
     </div>
   )
 }
