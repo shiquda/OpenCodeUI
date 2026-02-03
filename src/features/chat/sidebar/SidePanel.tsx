@@ -1,11 +1,25 @@
 import { useCallback, useMemo, useState, useEffect } from 'react'
 import { SessionList } from '../../sessions'
-import { ProjectSelector } from '../../sessions/ProjectSelector'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { 
+  SidebarIcon, 
+  FolderIcon, 
+  GlobeIcon, 
+  PlusIcon, 
+  TrashIcon, 
+  SearchIcon,
+  ChevronDownIcon
+} from '../../../components/Icons'
 import { useDirectory } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/SessionContext'
 import { updateSession, subscribeToConnectionState, type ApiSession, type ConnectionInfo } from '../../../api'
 import { uiErrorHandler } from '../../../utils'
-import { ComposeIcon } from '../../../components/Icons'
+
+// Claude.ai 设计模式：
+// - 按钮结构统一，不因 expanded/collapsed 改变 DOM
+// - 按钮内容使用 -translate-x-2 让图标在收起时居中
+// - 文字用 opacity 过渡，不改变布局
+// - 收起宽度 49px，展开宽度 288px
 
 interface SidePanelProps {
   onNewSession: () => void
@@ -14,7 +28,14 @@ interface SidePanelProps {
   selectedSessionId: string | null
   onAddProject: () => void
   isMobile?: boolean
-  isCollapsed?: boolean
+  isExpanded?: boolean
+  onToggleSidebar: () => void
+}
+
+interface ProjectItem {
+  id: string
+  worktree: string
+  name: string
 }
 
 export function SidePanel({
@@ -24,17 +45,24 @@ export function SidePanel({
   selectedSessionId,
   onAddProject,
   isMobile = false,
-  isCollapsed = false,
+  isExpanded = true,
+  onToggleSidebar,
 }: SidePanelProps) {
   const { currentDirectory, savedDirectories, setCurrentDirectory, removeDirectory } = useDirectory()
   const [connectionState, setConnectionState] = useState<ConnectionInfo | null>(null)
+  const [projectDeleteConfirm, setProjectDeleteConfirm] = useState<{ isOpen: boolean; projectId: string | null }>({
+    isOpen: false,
+    projectId: null
+  })
+  const [recentsExpanded, setRecentsExpanded] = useState(true)
+  const [projectsExpanded, setProjectsExpanded] = useState(false)
   
-  // 监听 SSE 连接状态
+  const showLabels = isExpanded || isMobile
+  
   useEffect(() => {
     return subscribeToConnectionState(setConnectionState)
   }, [])
   
-  // 使用 SessionContext
   const {
     sessions,
     isLoading,
@@ -47,35 +75,28 @@ export function SidePanel({
     refresh,
   } = useSessionContext()
 
-  // 构建项目列表数据
-  const projects = useMemo(() => {
-    const list = []
-    // Global
-    list.push({
+  const projects = useMemo<ProjectItem[]>(() => {
+    const list: ProjectItem[] = [{
       id: 'global',
       worktree: 'All projects',
       name: 'Global',
-      icon: { color: 'blue' }
-    })
-    // Saved
+    }]
     savedDirectories.forEach(d => {
       list.push({
-        id: d.path, // 使用 path 作为 ID
+        id: d.path,
         worktree: d.path,
         name: d.name,
-        icon: { color: 'indigo' } // 默认颜色
       })
     })
     return list
   }, [savedDirectories])
 
-  const currentProject = useMemo(() => {
+  const currentProject = useMemo<ProjectItem>(() => {
     if (!currentDirectory) return projects[0]
     return projects.find(p => p.id === currentDirectory) || {
       id: currentDirectory,
       worktree: currentDirectory,
       name: currentDirectory.split(/[/\\]/).pop() || currentDirectory,
-      icon: { color: 'gray' }
     }
   }, [currentDirectory, projects])
 
@@ -85,7 +106,11 @@ export function SidePanel({
     } else {
       setCurrentDirectory(projectId)
     }
-  }, [setCurrentDirectory])
+    setProjectsExpanded(false)
+    if (isMobile && onCloseMobile) {
+      onCloseMobile()
+    }
+  }, [setCurrentDirectory, isMobile, onCloseMobile])
 
   const handleRemoveProject = useCallback((projectId: string) => {
     removeDirectory(projectId)
@@ -107,83 +132,279 @@ export function SidePanel({
     }
   }, [currentDirectory, refresh])
 
-  // ==========================================
-  // Render: Collapsed Mode (Icon Only)
-  // ==========================================
-  if (isCollapsed) {
-    return (
-      <div className="flex flex-col items-center h-full py-2 gap-4">
-        <button
-          onClick={onNewSession}
-          className="w-10 h-10 flex items-center justify-center rounded-xl bg-bg-200/50 hover:bg-bg-200 hover:text-accent-main-100 text-text-400 transition-colors"
-          title="New Chat"
-        >
-          <ComposeIcon size={20} />
-        </button>
-        
-        {/* Placeholder icons for other features if needed */}
-        <div className="w-8 h-px bg-border-200/50" />
-        
-        <div className="flex flex-col gap-3">
-           {/* Just show simple indicators or nothing for now */}
-           {/* Maybe show recent sessions as dots? No, just keep it clean */}
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (!isExpanded) {
+      setProjectsExpanded(false)
+    }
+  }, [isExpanded])
 
-  // ==========================================
-  // Render: Full Mode
-  // ==========================================
+  // 统一的结构，通过 CSS 控制显示/隐藏
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Top Section: Project Selector Header - 移动端隐藏（Sidebar 已有 header） */}
-      {!isMobile && (
-        <div className="h-14 flex items-center px-3 z-20 relative shrink-0">
-          <div className="w-full relative z-20">
-            <ProjectSelector
-              currentProject={currentProject as any}
-              projects={projects as any}
-              isLoading={false}
-              onSelectProject={handleSelectProject}
-              onAddProject={onAddProject}
-              onRemoveProject={handleRemoveProject}
+      {/* ===== Header ===== */}
+      <div className="h-14 shrink-0 flex items-center">
+        {/* Logo 区域 - 展开时显示 */}
+        <div 
+          className="overflow-hidden transition-all duration-300 ease-out"
+          style={{ 
+            width: showLabels ? 'auto' : 0,
+            paddingLeft: showLabels ? 16 : 0,
+            opacity: showLabels ? 1 : 0,
+          }}
+        >
+          <a href="/" className="flex items-center whitespace-nowrap">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 16" className="h-4 text-text-100" fill="currentColor">
+              <path d="M7.98 15.73C6.50667 15.73 5.17667 15.4367 3.99 14.85C2.81 14.2567 1.88 13.4167 1.2 12.33C0.526669 11.2367 0.190002 9.96334 0.190002 8.51001C0.190002 7.01001 0.526669 5.67334 1.2 4.50001C1.87334 3.32668 2.8 2.41668 3.98 1.77001C5.16667 1.11668 6.49334 0.790009 7.96 0.790009C8.88667 0.790009 9.81667 0.896676 10.75 1.11001C11.69 1.32334 12.5033 1.64001 13.19 2.06001V5.36001H12.29C12.05 4.22668 11.5867 3.36334 10.9 2.77001C10.2133 2.17668 9.24 1.88001 7.98 1.88001C6.85334 1.88001 5.91334 2.15334 5.16 2.70001C4.40667 3.24001 3.84667 3.98334 3.48 4.93001C3.12 5.87001 2.94 6.94668 2.94 8.16001C2.94 9.37334 3.14667 10.4733 3.56 11.46C3.97334 12.44 4.57667 13.2167 5.37 13.79C6.16334 14.3567 7.11 14.64 8.21 14.64C8.97667 14.64 9.63667 14.4733 10.19 14.14C10.75 13.8 11.2167 13.3533 11.59 12.8C11.97 12.2467 12.3367 11.5667 12.69 10.76H13.63L12.99 14.43C12.35 14.8567 11.5733 15.18 10.66 15.4C9.75334 15.62 8.86 15.73 7.98 15.73Z"/>
+            </svg>
+          </a>
+        </div>
+        
+        {/* Toggle Button - 展开时右对齐，收起时居中 */}
+        {!isMobile && (
+          <div 
+            className="flex-1 flex items-center transition-all duration-300 ease-out"
+            style={{ justifyContent: showLabels ? 'flex-end' : 'center', paddingRight: showLabels ? 8 : 0 }}
+          >
+            <button
+              onClick={onToggleSidebar}
+              aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-text-400 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-200"
+            >
+              <SidebarIcon size={18} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ===== Navigation - 图标位置固定 ===== */}
+      <div className="flex flex-col gap-0.5 mx-2">
+        {/* New Chat - 图标始终在 padding-left: 6px 位置，收起时刚好居中 */}
+        <button
+          onClick={onNewSession}
+          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 group overflow-hidden"
+          style={{ 
+            width: showLabels ? '100%' : 32,
+            paddingLeft: 6,
+            paddingRight: 6,
+          }}
+          title="New chat"
+        >
+          <span className="size-5 flex items-center justify-center shrink-0">
+            <PlusIcon size={16} />
+          </span>
+          <span 
+            className="ml-2 text-sm whitespace-nowrap transition-opacity duration-300"
+            style={{ opacity: showLabels ? 1 : 0 }}
+          >
+            New chat
+          </span>
+          <span 
+            className="ml-auto text-[10px] text-text-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            style={{ opacity: showLabels ? undefined : 0 }}
+          >
+            Ctrl+Shift+O
+          </span>
+        </button>
+
+        {/* Project Selector - 只在展开时显示 */}
+        {showLabels && (
+          <button
+            onClick={() => setProjectsExpanded(!projectsExpanded)}
+            className={`h-8 flex items-center rounded-lg active:scale-[0.98] transition-all duration-300 overflow-hidden ${
+              projectsExpanded ? 'bg-bg-200 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200'
+            }`}
+            style={{ paddingLeft: 6, paddingRight: 6 }}
+            title={currentProject?.name || 'Global'}
+          >
+            <span className="size-5 flex items-center justify-center shrink-0">
+              {currentProject?.id === 'global' 
+                ? <GlobeIcon size={16} className="text-accent-main-100" /> 
+                : <FolderIcon size={16} />
+              }
+            </span>
+            <span className="ml-2 text-sm truncate">
+              {currentProject?.name || 'Global'}
+            </span>
+            <ChevronDownIcon 
+              size={14} 
+              className={`ml-auto text-text-400 transition-transform duration-200 shrink-0 ${projectsExpanded ? '' : '-rotate-90'}`}
             />
+          </button>
+        )}
+        
+        {/* Projects Dropdown */}
+        <div 
+          className="overflow-hidden transition-all duration-300 ease-out"
+          style={{
+            maxHeight: (showLabels && projectsExpanded) ? 300 : 0,
+            opacity: (showLabels && projectsExpanded) ? 1 : 0,
+            marginTop: (showLabels && projectsExpanded) ? 4 : 0,
+          }}
+        >
+          <div className="rounded-lg border border-border-200/50 bg-bg-100/80 overflow-hidden">
+            <div className="max-h-48 overflow-y-auto custom-scrollbar py-1">
+              {projects.map((project) => {
+                const isGlobal = project.id === 'global'
+                const isActive = currentProject?.id === project.id
+                return (
+                  <button
+                    key={project.id}
+                    onClick={() => handleSelectProject(project.id)}
+                    className={`group w-full flex items-center gap-2 px-2 py-1.5 transition-colors ${
+                      isActive ? 'bg-bg-200/60 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200/50'
+                    }`}
+                    title={project.worktree}
+                  >
+                    <span className="w-5 h-5 flex items-center justify-center">
+                      {isGlobal 
+                        ? <GlobeIcon size={14} className="text-accent-main-100" /> 
+                        : <FolderIcon size={14} />
+                      }
+                    </span>
+                    <span className="flex-1 text-xs text-left truncate">{project.name}</span>
+                    {!isGlobal && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
+                        }}
+                        className="p-1 rounded text-text-400 hover:text-danger-100 hover:bg-danger-100/10 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Remove"
+                      >
+                        <TrashIcon size={12} />
+                      </button>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="border-t border-border-200/50 p-1">
+              <button
+                onClick={onAddProject}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors"
+              >
+                <PlusIcon size={14} />
+                Add project...
+              </button>
+            </div>
           </div>
         </div>
-      )}
-
-      {/* List */}
-      <div className="flex-1 overflow-hidden pt-2">
-        <SessionList
-          sessions={sessions}
-          selectedId={selectedSessionId}
-          isLoading={isLoading}
-          isLoadingMore={isLoadingMore}
-          hasMore={hasMore}
-          search={search}
-          onSearchChange={setSearch}
-          onSelect={handleSelect}
-          onDelete={deleteSession}
-          onRename={handleRename}
-          onLoadMore={loadMore}
-          onNewChat={onNewSession}
-        />
       </div>
-      
-      {/* Bottom Bar: Connection & Settings */}
-      <div className="px-4 py-3 border-t border-border-200/30 flex items-center justify-between text-xs text-text-400">
-        <div className="flex items-center gap-2">
-          <ConnectionIndicator state={connectionState?.state || 'disconnected'} />
-          <span className="opacity-70">{connectionState?.state === 'connected' ? 'Online' : 'Offline'}</span>
+
+      {/* ===== Main Content ===== */}
+      <div 
+        className="flex-1 flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-out"
+        style={{
+          opacity: showLabels ? 1 : 0,
+          visibility: showLabels ? 'visible' : 'hidden',
+        }}
+      >
+        {/* Search */}
+        <div className="px-3 py-2 mt-2">
+          <div className="relative group">
+            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400 w-3.5 h-3.5 group-focus-within:text-accent-main-100 transition-colors" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search chats..."
+              className="w-full bg-bg-200/40 hover:bg-bg-200/60 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-lg py-1.5 pl-8 pr-8 text-xs text-text-100 placeholder:text-text-400/70 focus:outline-none transition-all"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-400 hover:text-text-100 text-sm"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Recents */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <button
+            onClick={() => setRecentsExpanded(!recentsExpanded)}
+            className="flex items-center justify-between px-4 py-1.5 group cursor-pointer"
+          >
+            <span className="text-[10px] font-semibold text-text-500 uppercase tracking-wider">
+              Recents
+            </span>
+            <span className="text-text-400 opacity-0 group-hover:opacity-75 transition-opacity text-[10px]">
+              {recentsExpanded ? 'Hide' : 'Show'}
+            </span>
+          </button>
+          
+          {recentsExpanded && (
+            <div className="flex-1 overflow-hidden">
+              <SessionList
+                sessions={sessions}
+                selectedId={selectedSessionId}
+                isLoading={isLoading}
+                isLoadingMore={isLoadingMore}
+                hasMore={hasMore}
+                search={search}
+                onSearchChange={setSearch}
+                onSelect={handleSelect}
+                onDelete={deleteSession}
+                onRename={handleRename}
+                onLoadMore={loadMore}
+                onNewChat={onNewSession}
+                showHeader={false}
+                grouped={false}
+                density="compact"
+                showStats
+              />
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Spacer for collapsed */}
+      {!showLabels && <div className="flex-1" />}
+      
+      {/* ===== Footer ===== */}
+      <div className="shrink-0 border-t border-border-200/30">
+        <div 
+          className="h-10 flex items-center transition-all duration-300 ease-out mx-2 px-4"
+        >
+          <div 
+            className="flex items-center gap-2 transition-transform duration-300"
+            style={{ transform: showLabels ? 'none' : 'translateX(-8px)' }}
+          >
+            <ConnectionIndicator state={connectionState?.state || 'disconnected'} />
+            <span 
+              className="text-xs text-text-400 whitespace-nowrap transition-opacity duration-300"
+              style={{ opacity: showLabels ? 1 : 0 }}
+            >
+              {connectionState?.state === 'connected' ? 'Connected' : 'Offline'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={projectDeleteConfirm.isOpen}
+        onClose={() => setProjectDeleteConfirm({ isOpen: false, projectId: null })}
+        onConfirm={() => {
+          if (projectDeleteConfirm.projectId) {
+            handleRemoveProject(projectDeleteConfirm.projectId)
+          }
+          setProjectDeleteConfirm({ isOpen: false, projectId: null })
+        }}
+        title="Remove Project"
+        description="Remove this project folder from the list? Files won't be deleted."
+        confirmText="Remove"
+        variant="danger"
+      />
     </div>
   )
 }
 
 // ============================================
-// Connection Status Indicator
+// Connection Indicator
 // ============================================
 
 function ConnectionIndicator({ state }: { state: string }) {
@@ -193,18 +414,6 @@ function ConnectionIndicator({ state }: { state: string }) {
     disconnected: 'bg-text-500',
     error: 'bg-danger-100',
   }[state] || 'bg-text-500'
-  
-  const title = {
-    connected: 'Connected',
-    connecting: 'Connecting...',
-    disconnected: 'Disconnected',
-    error: 'Connection error',
-  }[state] || 'Unknown'
 
-  return (
-    <div className="flex items-center gap-1.5" title={title}>
-      <div className={`w-1.5 h-1.5 rounded-full ${colorClass}`} />
-    </div>
-  )
+  return <div className={`w-2 h-2 rounded-full shrink-0 ${colorClass}`} />
 }
-

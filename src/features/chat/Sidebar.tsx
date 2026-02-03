@@ -2,27 +2,21 @@ import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { SidePanel } from './sidebar/SidePanel'
 import { ProjectDialog } from './ProjectDialog'
 import { useDirectory } from '../../hooks'
-import { 
-  CloseIcon, 
-  SidebarIcon, 
-  ComposeIcon,
-  SearchIcon,
-  CogIcon
-} from '../../components/Icons'
+import { CloseIcon } from '../../components/Icons'
 import { type ApiSession } from '../../api'
 
-const COLLAPSED_WIDTH = 60
 const MIN_WIDTH = 240
 const MAX_WIDTH = 480
-const DEFAULT_WIDTH = 280
+const DEFAULT_WIDTH = 288  // Claude.ai: 18rem = 288px
+const RAIL_WIDTH = 49      // Claude.ai: 3.05rem ≈ 49px
 
 interface SidebarProps {
-  isOpen: boolean // Desktop: Expanded / Mobile: Visible
+  isOpen: boolean
   selectedSessionId: string | null
   onSelectSession: (session: ApiSession) => void
   onNewSession: () => void
-  onClose: () => void // Mobile close / Desktop collapse
-  onToggle: () => void
+  onOpen: () => void
+  onClose: () => void
 }
 
 export const Sidebar = memo(function Sidebar({
@@ -30,14 +24,14 @@ export const Sidebar = memo(function Sidebar({
   selectedSessionId,
   onSelectSession,
   onNewSession,
+  onOpen,
   onClose,
-  onToggle,
 }: SidebarProps) {
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
   const { addDirectory, pathInfo } = useDirectory()
   const [isMobile, setIsMobile] = useState(false)
   
-  // Width state
+  // Resizable state
   const [width, setWidth] = useState(() => {
     try {
       const saved = localStorage.getItem('sidebar-width')
@@ -51,7 +45,14 @@ export const Sidebar = memo(function Sidebar({
 
   const handleAddProject = useCallback((path: string) => {
     addDirectory(path)
-  }, [addDirectory])
+    if (!isMobile) {
+      onOpen()
+    }
+  }, [addDirectory, isMobile, onOpen])
+
+  const openProjectDialog = useCallback(() => {
+    setIsProjectDialogOpen(true)
+  }, [])
 
   // 检测移动端
   useEffect(() => {
@@ -85,6 +86,13 @@ export const Sidebar = memo(function Sidebar({
       document.removeEventListener('mouseup', handleMouseUp)
     }
   }, [isResizing, width])
+  
+  // Save width
+  useEffect(() => {
+    if (!isResizing) {
+      localStorage.setItem('sidebar-width', width.toString())
+    }
+  }, [width, isResizing])
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -93,146 +101,80 @@ export const Sidebar = memo(function Sidebar({
     document.body.style.userSelect = 'none'
   }, [])
 
-  // Mobile Backdrop Click
+  // 移动端遮罩点击
   const handleBackdropClick = useCallback(() => {
     if (isMobile && isOpen) {
       onClose()
     }
   }, [isMobile, isOpen, onClose])
 
-  // Desktop: Determine effective width (Collapsed vs Expanded)
-  const desktopWidth = isOpen ? width : COLLAPSED_WIDTH
+  const handleToggle = useCallback(() => {
+    if (isOpen) {
+      onClose()
+    } else {
+      onOpen()
+    }
+  }, [isOpen, onClose, onOpen])
 
-  // Common Toggle Button
-  const ToggleButton = () => (
-    <button
-      onClick={onToggle}
-      className={`
-        w-10 h-10 flex items-center justify-center rounded-lg transition-colors shrink-0
-        text-text-400 hover:text-text-100 hover:bg-bg-200/50
-        ${!isOpen && !isMobile ? 'mx-auto' : ''} 
-      `}
-      title={isOpen ? "Collapse" : "Expand"}
-    >
-      <SidebarIcon size={20} />
-    </button>
-  )
+  // 动态样式：桌面端收起时显示 rail，展开时显示完整宽度
+  const sidebarStyle = isMobile 
+    ? { width: `${DEFAULT_WIDTH}px` } 
+    : { width: isOpen ? `${width}px` : `${RAIL_WIDTH}px` }
 
-  // 渲染内容
-  const renderContent = () => (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Header Area (h-14 to match Main Header) */}
-      <div className={`
-        h-14 flex items-center px-3 shrink-0
-        ${!isOpen && !isMobile ? 'justify-center' : 'justify-between'}
-      `}>
-        {/* Toggle Button (Left aligned or Centered) */}
-        <div className="flex items-center gap-2 overflow-hidden">
-          <ToggleButton />
-          
-          {(isOpen || isMobile) && (
-            <span className="font-semibold text-text-100 truncate ml-1 opacity-100 transition-opacity duration-200 select-none">
-              OpenCode
-            </span>
-          )}
-        </div>
-
-        {/* Mobile Close Button (Right) */}
-        {isMobile && (
-          <button
-            onClick={onClose}
-            className="p-2 -mr-2 text-text-400 hover:text-text-100"
-          >
-            <CloseIcon size={18} />
-          </button>
-        )}
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-        <SidePanel
-          onNewSession={() => { onNewSession(); if(isMobile) onClose(); }}
-          onSelectSession={(s) => { onSelectSession(s); if(isMobile) onClose(); }}
-          selectedSessionId={selectedSessionId}
-          onAddProject={() => setIsProjectDialogOpen(true)}
-          isMobile={isMobile}
-          isCollapsed={!isOpen && !isMobile}
+  return (
+    <>
+      {/* Mobile Backdrop */}
+      {isMobile && (
+        <div 
+          className={`
+            fixed inset-0 bg-black/40 z-30
+            transition-opacity duration-300
+            ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
+          `}
+          onClick={handleBackdropClick}
         />
-      </div>
+      )}
 
-      {/* Bottom User/Settings Area */}
-      <div className={`
-        p-3 mt-auto shrink-0 flex items-center gap-3
-        ${!isOpen && !isMobile ? 'justify-center flex-col pb-6' : ''}
-        border-t border-border-200/30
-      `}>
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-secondary-100 to-accent-main-100 shrink-0" />
-        
-        {(isOpen || isMobile) && (
-          <div className="flex-1 min-w-0 flex items-center justify-between">
-            <div className="text-sm font-medium text-text-200 truncate">User</div>
-            <button className="text-text-400 hover:text-text-100 p-1.5 rounded-md hover:bg-bg-200/50">
-              <CogIcon size={18} />
+      {/* Sidebar Container */}
+      <div 
+        ref={sidebarRef}
+        style={sidebarStyle}
+        className={`
+          flex flex-col h-full bg-bg-100 overflow-hidden shrink-0
+          ${isMobile 
+            ? `fixed inset-y-0 left-0 z-40 shadow-xl transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
+            : `relative border-r border-border-200/50 ${isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-out'}`
+          }
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        {isMobile && (
+          <div className="h-14 flex items-center justify-between px-4 border-b border-border-200/50 shrink-0">
+            <span className="text-sm font-medium text-text-100">Menu</span>
+            <button
+              onClick={onClose}
+              className="p-2 -mr-2 rounded-lg text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors"
+              aria-label="Close sidebar"
+            >
+              <CloseIcon size={18} />
             </button>
           </div>
         )}
-        
-        {/* Collapsed mode settings icon */}
-        {(!isOpen && !isMobile) && (
-           <button className="text-text-400 hover:text-text-100 p-2 rounded-md hover:bg-bg-200/50">
-              <CogIcon size={20} />
-            </button>
-        )}
-      </div>
-    </div>
-  )
 
-  // Mobile Layout
-  if (isMobile) {
-    return (
-      <>
-        {isOpen && (
-          <div 
-            className="fixed inset-0 bg-black/40 z-40 transition-opacity duration-300"
-            onClick={handleBackdropClick}
-          />
-        )}
-        <div 
-          className={`
-            fixed inset-y-0 left-0 z-50 w-[85%] max-w-[320px] bg-bg-100 shadow-2xl 
-            transform transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)]
-            ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-          `}
-        >
-          {renderContent()}
-        </div>
-
-        <ProjectDialog
-          isOpen={isProjectDialogOpen}
-          onClose={() => setIsProjectDialogOpen(false)}
-          onSelect={handleAddProject}
-          initialPath={pathInfo?.home}
+        {/* Main Content */}
+        <SidePanel
+          onNewSession={onNewSession}
+          onSelectSession={onSelectSession}
+          onCloseMobile={onClose}
+          selectedSessionId={selectedSessionId}
+          onAddProject={openProjectDialog}
+          isMobile={isMobile}
+          isExpanded={isOpen}
+          onToggleSidebar={handleToggle}
         />
-      </>
-    )
-  }
 
-  // Desktop Layout
-  return (
-    <>
-      <div 
-        ref={sidebarRef}
-        style={{ width: desktopWidth }}
-        className={`
-          relative h-full bg-bg-100 z-30 shrink-0
-          transition-[width] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)]
-          border-r border-border-200/50
-        `}
-      >
-        {renderContent()}
-
-        {/* Resizer - Only when open */}
-        {isOpen && (
+        {/* Resizer Handle (Desktop only, when expanded) */}
+        {!isMobile && isOpen && (
           <div
             className={`
               absolute top-0 right-0 w-1 h-full cursor-col-resize z-50
@@ -244,6 +186,7 @@ export const Sidebar = memo(function Sidebar({
         )}
       </div>
 
+      {/* Project Dialog */}
       <ProjectDialog
         isOpen={isProjectDialogOpen}
         onClose={() => setIsProjectDialogOpen(false)}

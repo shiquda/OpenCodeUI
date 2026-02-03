@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
-import { SearchIcon, PencilIcon, TrashIcon } from '../../components/Icons'
+import { SearchIcon, PencilIcon, TrashIcon, ComposeIcon } from '../../components/Icons'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import type { ApiSession } from '../../api'
@@ -17,6 +17,10 @@ interface SessionListProps {
   onRename: (sessionId: string, newTitle: string) => void
   onLoadMore: () => void
   onNewChat: () => void
+  showHeader?: boolean
+  grouped?: boolean
+  density?: 'default' | 'compact'
+  showStats?: boolean
 }
 
 // 时间分组类型
@@ -34,7 +38,11 @@ export function SessionList({
   onDelete,
   onRename,
   onLoadMore,
-  // onNewChat, // Not used here
+  onNewChat,
+  showHeader = true,
+  grouped = true,
+  density = 'default',
+  showStats = true,
 }: SessionListProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -96,30 +104,43 @@ export function SessionList({
     return groups
   }, [sessions])
 
+  const isCompact = density === 'compact'
+
   // 只有非搜索状态才显示分组
-  const showGroups = !search
+  const showGroups = !search && grouped
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search Bar - Minimalist */}
-      <div className="px-3 pb-2 flex-shrink-0">
-        <div className="relative group">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-text-400 w-3.5 h-3.5 group-focus-within:text-accent-main-100 transition-colors" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search chats..."
-            className="w-full bg-bg-200/40 hover:bg-bg-200/80 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-lg py-2 pl-9 pr-3 text-xs text-text-100 placeholder:text-text-400/70 focus:outline-none focus:shadow-sm transition-all duration-200"
-          />
+      {/* Search Bar + New Chat */}
+      {showHeader && (
+        <div className="px-3 pb-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="relative group flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-text-400 w-3.5 h-3.5 group-focus-within:text-accent-main-100 transition-colors" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Search chats..."
+                className="w-full bg-bg-200/40 hover:bg-bg-200/80 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-lg py-2 pl-9 pr-3 text-xs text-text-100 placeholder:text-text-400/70 focus:outline-none focus:shadow-sm transition-all duration-200"
+              />
+            </div>
+            <button
+              onClick={onNewChat}
+              title="New Chat"
+              className="p-2 rounded-lg bg-bg-200/40 hover:bg-bg-200/80 text-text-400 hover:text-text-100 transition-all duration-200"
+            >
+              <ComposeIcon size={16} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Session List */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto custom-scrollbar px-2 pb-4 space-y-4"
+        className={`flex-1 overflow-y-auto custom-scrollbar px-2 ${isCompact ? 'pb-3 space-y-2' : 'pb-4 space-y-4'}`}
       >
         {isLoading && sessions.length === 0 ? (
           <div className="flex items-center justify-center py-8">
@@ -142,14 +163,16 @@ export function SessionList({
                 </h3>
                 <div className="space-y-0.5">
                   {groupSessions.map(session => (
-                    <SessionItem
-                      key={session.id}
-                      session={session}
-                      isSelected={session.id === selectedId}
-                      onSelect={() => onSelect(session)}
-                      onDelete={() => setDeleteConfirm({ isOpen: true, sessionId: session.id })}
-                      onRename={(newTitle) => onRename(session.id, newTitle)}
-                    />
+                      <SessionItem
+                        key={session.id}
+                        session={session}
+                        isSelected={session.id === selectedId}
+                        onSelect={() => onSelect(session)}
+                        onDelete={() => setDeleteConfirm({ isOpen: true, sessionId: session.id })}
+                        onRename={(newTitle) => onRename(session.id, newTitle)}
+                        density={density}
+                        showStats={showStats}
+                      />
                   ))}
                 </div>
               </div>
@@ -166,6 +189,8 @@ export function SessionList({
                 onSelect={() => onSelect(session)}
                 onDelete={() => onDelete(session.id)}
                 onRename={(newTitle) => onRename(session.id, newTitle)}
+                density={density}
+                showStats={showStats}
               />
             ))}
           </div>
@@ -206,12 +231,15 @@ interface SessionItemProps {
   onSelect: () => void
   onDelete: () => void
   onRename: (newTitle: string) => void
+  density?: 'default' | 'compact'
+  showStats?: boolean
 }
 
-function SessionItem({ session, isSelected, onSelect, onDelete, onRename }: SessionItemProps) {
+function SessionItem({ session, isSelected, onSelect, onDelete, onRename, density = 'default', showStats = true }: SessionItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(session.title || '')
   const inputRef = useRef<HTMLInputElement>(null)
+  const isCompact = density === 'compact'
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -272,7 +300,7 @@ function SessionItem({ session, isSelected, onSelect, onDelete, onRename }: Sess
   return (
     <div
       onClick={onSelect}
-      className={`group relative flex items-start px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 border border-transparent ${
+      className={`group relative flex items-start ${isCompact ? 'px-3 py-2' : 'px-3 py-2.5'} rounded-lg cursor-pointer transition-all duration-200 border border-transparent ${
         isSelected
           ? 'bg-bg-000 shadow-sm ring-1 ring-border-200/50' 
           : 'hover:bg-bg-200/50'
@@ -280,9 +308,9 @@ function SessionItem({ session, isSelected, onSelect, onDelete, onRename }: Sess
     >
       <div className="flex-1 min-w-0 pr-1">
         {/* Row 1: Title + Time/Actions */}
-        <div className="flex items-start justify-between gap-2 h-5">
+        <div className={`flex items-start justify-between gap-2 ${isCompact ? 'h-4' : 'h-5'}`}>
           <p 
-            className={`text-sm truncate font-medium flex-1 ${isSelected ? 'text-text-100' : 'text-text-200 group-hover:text-text-100'}`}
+            className={`${isCompact ? 'text-[13px]' : 'text-sm'} truncate font-medium flex-1 ${isSelected ? 'text-text-100' : 'text-text-200 group-hover:text-text-100'}`}
             title={session.title || 'Untitled Chat'}
           >
             {session.title || 'Untitled Chat'}
@@ -317,23 +345,25 @@ function SessionItem({ session, isSelected, onSelect, onDelete, onRename }: Sess
         </div>
 
         {/* Row 2: Stats / Placeholder */}
-        <div className="flex items-center gap-2 mt-1.5 h-4">
-          {session.summary ? (
-            <div className="flex items-center gap-2 text-[10px] font-mono opacity-80">
-              {session.summary.additions > 0 && (
-                <span className="text-success-100 bg-success-100/10 px-1 rounded">+{session.summary.additions}</span>
-              )}
-              {session.summary.deletions > 0 && (
-                <span className="text-danger-100 bg-danger-100/10 px-1 rounded">-{session.summary.deletions}</span>
-              )}
-              {session.summary.files > 0 && (
-                <span className="text-text-400">{session.summary.files} {session.summary.files === 1 ? 'file' : 'files'}</span>
-              )}
-            </div>
-          ) : (
-            <span className="text-[10px] text-text-400/40 italic">No changes</span>
-          )}
-        </div>
+        {showStats && (
+          <div className={`flex items-center gap-2 ${isCompact ? 'mt-1' : 'mt-1.5'} h-4`}>
+            {session.summary ? (
+              <div className="flex items-center gap-2 text-[10px] font-mono opacity-80">
+                {session.summary.additions > 0 && (
+                  <span className="text-success-100 bg-success-100/10 px-1 rounded">+{session.summary.additions}</span>
+                )}
+                {session.summary.deletions > 0 && (
+                  <span className="text-danger-100 bg-danger-100/10 px-1 rounded">-{session.summary.deletions}</span>
+                )}
+                {session.summary.files > 0 && (
+                  <span className="text-text-400">{session.summary.files} {session.summary.files === 1 ? 'file' : 'files'}</span>
+                )}
+              </div>
+            ) : (
+              <span className="text-[10px] text-text-400/40 italic">No changes</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

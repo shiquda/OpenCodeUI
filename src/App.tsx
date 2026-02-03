@@ -138,8 +138,8 @@ function App() {
         selectedSessionId={routeSessionId}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
+        onOpen={() => setSidebarExpanded(true)}
         onClose={() => setSidebarExpanded(false)}
-        onToggle={() => setSidebarExpanded(!sidebarExpanded)}
       />
 
       {/* Main Content Area: Chat Column + Right Panel */}
@@ -156,7 +156,6 @@ function App() {
                   modelsLoading={modelsLoading}
                   selectedModelKey={selectedModelKey}
                   onModelChange={handleModelChange}
-                  onToggleSidebar={() => setSidebarExpanded(!sidebarExpanded)}
                   themeMode={themeMode}
                   onThemeChange={setThemeWithAnimation}
                   isWideMode={isWideMode}

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon } from '../../components/Icons'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon } from '../../components/Icons'
 import { listDirectory, getPath } from '../../api'
 import { fileErrorHandler } from '../../utils'
 
@@ -22,11 +22,15 @@ interface FileItem {
 }
 
 // ============================================
-// Utils
+// Constants
 // ============================================
 
 const isWindows = typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('win')
 const PATH_SEP = isWindows ? '\\' : '/'
+
+// ============================================
+// Utils
+// ============================================
 
 function normalizePath(p: string): string {
   if (!p) return ''
@@ -58,59 +62,62 @@ function joinPath(base: string, name: string): string {
 // ============================================
 
 export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: ProjectDialogProps) {
+  // State
   const [inputValue, setInputValue] = useState('')
   const [items, setItems] = useState<FileItem[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  // 动画状态
-  const [shouldRender, setShouldRender] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  const [shouldRender, setShouldRender] = useState(false)
 
+  // Refs
   const loadedPathRef = useRef<string>('')
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingSelectionRef = useRef<string | null>(null)
 
+  // Computed
+  const currentDir = useMemo(() => getDirectoryPath(inputValue), [inputValue])
+  const filterText = useMemo(() => getFilterText(inputValue), [inputValue])
+  
+  const filteredItems = useMemo(() => {
+    if (!filterText) return items
+    const lower = filterText.toLowerCase()
+    return items.filter(item => item.name.toLowerCase().startsWith(lower))
+  }, [items, filterText])
+
+  // ==========================================
   // Initialize
+  // ==========================================
+
   useEffect(() => {
     if (isOpen) {
-      if (initialPath) {
-        let path = normalizePath(initialPath)
+      const initPath = async () => {
+        let path = initialPath
+        if (!path) {
+          try {
+            const p = await getPath()
+            path = p.home
+          } catch { /* ignore */ }
+        }
+        path = normalizePath(path)
         if (!path.endsWith(PATH_SEP)) path += PATH_SEP
         setInputValue(path)
-      } else {
-        getPath().then(p => {
-          let path = normalizePath(p.home)
-          if (!path.endsWith(PATH_SEP)) path += PATH_SEP
-          setInputValue(path)
-        }).catch(() => {})
+        setSelectedIndex(0)
+        pendingSelectionRef.current = null
+        setTimeout(() => inputRef.current?.focus(), 50)
       }
-      setSelectedIndex(0)
-      pendingSelectionRef.current = null
-      setTimeout(() => inputRef.current?.focus(), 50)
+      initPath()
     }
   }, [isOpen, initialPath])
 
-  const currentDir = useMemo(() => getDirectoryPath(inputValue), [inputValue])
-  const filterText = useMemo(() => getFilterText(inputValue), [inputValue])
+  // ==========================================
+  // Load Directory
+  // ==========================================
 
-  // Load directory
   useEffect(() => {
     if (!isOpen || !currentDir) return
-    
-    // 如果仅仅是 filter 变化，不需要重新加载 listDirectory
-    // 但我们需要确保当 currentDir 变化时（进入/退出目录），重新加载
-    // 这里我们简单起见，每次 currentDir 变了就加载
-    // 注意：如果 items 已经包含了 currentDir 的内容，是否可以复用？
-    // 现在的逻辑是：loadedPathRef.current 记录上次加载的目录
-    
-    if (currentDir === loadedPathRef.current && items.length > 0) {
-       // 目录没变，只是 filter 变了，不需要重新 listDirectory
-       // 但如果之前有 pendingSelection，可能需要处理？
-       // 不，pendingSelection 只在目录变更（回退）时设置
-       return
-    }
+    if (currentDir === loadedPathRef.current && items.length > 0) return
 
     setIsLoading(true)
     setError(null)
@@ -129,14 +136,9 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
         setItems(fileItems)
         loadedPathRef.current = currentDir
         
-        // 恢复选中位置
         if (pendingSelectionRef.current) {
           const idx = fileItems.findIndex(item => item.name === pendingSelectionRef.current)
-          if (idx !== -1) {
-            setSelectedIndex(idx)
-          } else {
-            setSelectedIndex(0)
-          }
+          setSelectedIndex(idx !== -1 ? idx : 0)
           pendingSelectionRef.current = null
         } else {
           setSelectedIndex(0)
@@ -148,67 +150,70 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
         setItems([])
       })
       .finally(() => setIsLoading(false))
-  }, [isOpen, currentDir])
+  }, [isOpen, currentDir, items.length])
 
-  const filteredItems = useMemo(() => {
-    if (!filterText) return items
-    const lowerFilter = filterText.toLowerCase()
-    return items.filter(item => item.name.toLowerCase().startsWith(lowerFilter))
-  }, [items, filterText])
+  // ==========================================
+  // Scroll to Selection
+  // ==========================================
 
-  // 滚动逻辑优化
   useEffect(() => {
-    const targetId = selectedIndex === -1 ? 'project-item-up' : `project-item-${selectedIndex}`
-    const el = document.getElementById(targetId)
-    if (el) {
-      el.scrollIntoView({ block: 'nearest' })
-    }
+    const el = document.getElementById(`project-item-${selectedIndex}`)
+    el?.scrollIntoView({ block: 'nearest' })
   }, [selectedIndex, filteredItems])
 
-  // Handlers
-  const handleSelectFolder = (folderName: string) => {
-    const fullPath = joinPath(currentDir, folderName)
-    onSelect(fullPath)
-    onClose()
-  }
+  // ==========================================
+  // Animation
+  // ==========================================
 
-  const handleConfirmCurrent = () => {
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true)
+      const timer = setTimeout(() => setIsVisible(true), 10)
+      return () => clearTimeout(timer)
+    } else {
+      setIsVisible(false)
+      const timer = setTimeout(() => setShouldRender(false), 200)
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen])
+
+  // ==========================================
+  // Handlers
+  // ==========================================
+
+  const handleGoBack = useCallback(() => {
+    let current = inputValue
+    if (!current.endsWith(PATH_SEP)) {
+      current = getDirectoryPath(current)
+    } else {
+      current = current.slice(0, -1)
+    }
+    
+    const parent = getDirectoryPath(current)
+    if (parent && parent !== current + PATH_SEP) {
+      const folderName = current.split(PATH_SEP).pop()
+      if (folderName) pendingSelectionRef.current = folderName
+      setInputValue(parent)
+    }
+  }, [inputValue])
+
+  const handleItemClick = useCallback((item: FileItem) => {
+    setInputValue(item.path + PATH_SEP)
+    inputRef.current?.focus()
+  }, [])
+
+  const handleSelectFolder = useCallback((folderName: string) => {
+    onSelect(joinPath(currentDir, folderName))
+    onClose()
+  }, [currentDir, onSelect, onClose])
+
+  const handleConfirmCurrent = useCallback(() => {
     const path = inputValue.endsWith(PATH_SEP) ? inputValue.slice(0, -1) : inputValue
     onSelect(path)
     onClose()
-  }
+  }, [inputValue, onSelect, onClose])
 
-  const handleItemClick = (item: FileItem) => {
-    setInputValue(item.path + PATH_SEP)
-    inputRef.current?.focus()
-  }
-
-  const handleGoBack = () => {
-    // 只有当是目录视图时才回退，或者输入框为空（可选）
-    // 这里我们遵循：如果以分隔符结尾，或者是“..”点击
-    let current = inputValue
-    if (!current.endsWith(PATH_SEP)) {
-       // 如果正在过滤，Backspace 是删除字符，不触发回退逻辑
-       // 但如果是 ArrowLeft 且光标在左边，可能需要特殊处理
-       // 这里 handleGoBack 主要给 ArrowLeft/.. 使用
-       current = getDirectoryPath(current) // 回到当前目录视图
-    } else {
-       // 去掉末尾分隔符
-       current = current.slice(0, -1)
-    }
-    
-    // 获取上一级
-    const parent = getDirectoryPath(current)
-    if (parent && parent !== current + PATH_SEP) { // 简单防死循环
-        // 记录离开的文件夹名
-        const folderName = current.split(PATH_SEP).pop()
-        if (folderName) pendingSelectionRef.current = folderName
-        
-        setInputValue(parent)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault()
@@ -227,19 +232,17 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
           setSelectedIndex(0)
         }
         break
-      case 'ArrowLeft':
+      case 'ArrowLeft': {
         const inputEl = e.currentTarget as HTMLInputElement
         const isAtStart = inputEl.selectionStart === 0 && inputEl.selectionEnd === 0
-        const isDirectoryView = inputValue.endsWith(PATH_SEP)
-
-        if (isAtStart || isDirectoryView) {
-           e.preventDefault()
-           handleGoBack()
+        if (isAtStart || inputValue.endsWith(PATH_SEP)) {
+          e.preventDefault()
+          handleGoBack()
         }
         break
+      }
       case 'Enter':
         e.preventDefault()
-        // 回车即选中（添加为项目）
         if (filteredItems.length > 0) {
           onSelect(filteredItems[selectedIndex].path)
         } else {
@@ -253,51 +256,35 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
         onClose()
         break
     }
-  }
+  }, [filteredItems, selectedIndex, inputValue, handleGoBack, onSelect, onClose])
 
-  // 动画控制 - 分两步：先渲染 DOM，再触发动画
-  useEffect(() => {
-    if (isOpen) {
-      setShouldRender(true)
-    } else {
-      setIsVisible(false)
-      const timer = setTimeout(() => setShouldRender(false), 200)
-      return () => clearTimeout(timer)
-    }
-  }, [isOpen])
-
-  // 当 DOM 渲染后再触发入场动画
-  useEffect(() => {
-    if (shouldRender && isOpen) {
-      const timer = setTimeout(() => setIsVisible(true), 10)
-      return () => clearTimeout(timer)
-    }
-  }, [shouldRender, isOpen])
+  // ==========================================
+  // Render
+  // ==========================================
 
   if (!shouldRender) return null
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-200 ease-out"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-200"
       style={{
         backgroundColor: isVisible ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0)',
-        backdropFilter: isVisible ? 'blur(2px)' : 'blur(0px)',
       }}
       onMouseDown={onClose}
     >
       <div 
-        className="w-[600px] max-w-full bg-bg-100/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-border-200/50 flex flex-col overflow-hidden transition-all duration-200 ease-out"
+        className="w-[560px] max-w-full bg-bg-100 rounded-2xl shadow-2xl border border-border-200/50 flex flex-col overflow-hidden transition-all duration-200"
         style={{ 
-          height: '500px',
+          height: '460px',
           opacity: isVisible ? 1 : 0,
-          transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(8px)',
+          transform: isVisible ? 'scale(1)' : 'scale(0.96)',
         }}
         onMouseDown={e => e.stopPropagation()}
       >
-        {/* Header / Input Area */}
-        <div className="flex-shrink-0 p-4 pb-2">
-          <div className="relative group bg-bg-000 rounded-xl shadow-sm border border-border-200 focus-within:border-accent-main-100/50 focus-within:ring-2 focus-within:ring-accent-main-100/20 transition-all duration-200 flex items-center px-3 py-2.5">
-            <FolderIcon className="text-text-400 w-5 h-5 flex-shrink-0 mr-3" />
+        {/* Header */}
+        <div className="p-4 pb-2 shrink-0">
+          <div className="relative bg-bg-000 rounded-xl border border-border-200 focus-within:border-accent-main-100/50 transition-colors flex items-center px-3 py-2.5">
+            <FolderIcon className="text-text-400 w-4 h-4 shrink-0 mr-2.5" />
             <input
               ref={inputRef}
               type="text"
@@ -308,111 +295,80 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
               }}
               onKeyDown={handleKeyDown}
               placeholder="Type path..."
-              className="flex-1 bg-transparent border-none outline-none text-sm text-text-100 placeholder:text-text-400 font-mono leading-relaxed"
+              className="flex-1 bg-transparent border-none outline-none text-sm text-text-100 placeholder:text-text-400 font-mono"
               autoComplete="off"
               spellCheck={false}
             />
-            {/* Enter Hint */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-text-200">Select Project</span>
-               {isLoading && <SpinnerIcon className="animate-spin text-text-400" size={20} />}
-              </div>
+            {isLoading && <SpinnerIcon className="animate-spin text-text-400 w-4 h-4" size={16} />}
           </div>
         </div>
 
-        {/* List Area */}
-        <div className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar">
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-2 py-1 custom-scrollbar">
           {error ? (
             <div className="flex items-center justify-center h-full text-danger-100 text-xs px-4 text-center">
               {error}
             </div>
           ) : (
-            <div className="space-y-1">
-              {/* Go Up Option */}
+            <div className="space-y-0.5">
+              {/* Go Up */}
               {inputValue.split(PATH_SEP).filter(Boolean).length > 0 && (
-                <div
+                <ListItem
                   id="project-item-up"
-                  onClick={() => {
-                    handleGoBack()
-                    inputRef.current?.focus()
-                  }}
-                  className={`group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                    selectedIndex === -1 
-                      ? 'bg-bg-000 shadow-sm ring-1 ring-border-200/50 text-text-100' 
-                      : 'text-text-400 hover:bg-bg-200/50 hover:text-text-200'
-                  }`}
+                  icon={<ArrowUpIcon className="w-3.5 h-3.5" />}
+                  label=".. (Parent)"
+                  isSelected={selectedIndex === -1}
+                  onClick={() => { handleGoBack(); inputRef.current?.focus() }}
                   onMouseEnter={() => setSelectedIndex(-1)}
-                >
-                  <div className={`w-5 h-5 flex items-center justify-center rounded-md transition-colors ${
-                    selectedIndex === -1 ? 'bg-bg-100 text-text-100' : 'bg-transparent'
-                  }`}>
-                    <ArrowUpIcon className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-medium">.. (Parent Directory)</span>
-                </div>
+                />
               )}
 
+              {/* Empty State */}
               {filteredItems.length === 0 && !isLoading && (
-                <div className="flex flex-col items-center justify-center h-32 text-text-400 text-xs gap-3 opacity-60">
-                  <FolderIcon className="w-8 h-8 opacity-20" />
+                <div className="flex flex-col items-center justify-center h-28 text-text-400/60 text-xs gap-2">
+                  <FolderIcon className="w-6 h-6 opacity-30" />
                   <span>{filterText ? 'No matching folders' : 'Empty folder'}</span>
                 </div>
               )}
 
-              {filteredItems.map((item, index) => {
-                const isSelected = index === selectedIndex
-                return (
-                  <div
-                    key={item.name}
-                    id={`project-item-${index}`}
-                    onClick={() => handleItemClick(item)}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    className={`group flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 border border-transparent ${
-                      isSelected 
-                        ? 'bg-bg-000 shadow-sm border-border-200/50 text-text-100 z-10 scale-[1.01]' 
-                        : 'text-text-300 hover:bg-bg-200/50 hover:text-text-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <FolderIcon className={`w-4 h-4 flex-shrink-0 transition-colors ${
-                        isSelected ? 'text-accent-main-100' : 'text-text-400 group-hover:text-text-300'
-                      }`} />
-                      <span className="text-sm truncate font-medium">{item.name}</span>
-                    </div>
-                    
-                    {isSelected && (
-                      <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleSelectFolder(item.name)
-                          }}
-                          className="flex items-center gap-1.5 text-[10px] bg-accent-main-100 hover:bg-accent-main-200 px-2 py-1 rounded-md text-white font-medium transition-colors shadow-sm"
-                        >
-                          <PlusIcon className="w-3 h-3" />
-                          Add Project
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {/* Items */}
+              {filteredItems.map((item, index) => (
+                <ListItem
+                  key={item.name}
+                  id={`project-item-${index}`}
+                  icon={<FolderIcon className="w-3.5 h-3.5" />}
+                  label={item.name}
+                  isSelected={index === selectedIndex}
+                  onClick={() => handleItemClick(item)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  action={
+                    index === selectedIndex && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleSelectFolder(item.name) }}
+                        className="flex items-center gap-1 text-[10px] bg-accent-main-100 hover:bg-accent-main-200 px-2 py-0.5 rounded text-white font-medium transition-colors"
+                      >
+                        <PlusIcon className="w-2.5 h-2.5" />
+                        Add
+                      </button>
+                    )
+                  }
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* Footer (Confirm Current) */}
-        <div className="flex-shrink-0 p-3 bg-bg-50/80 border-t border-border-200/50 flex justify-between items-center backdrop-blur-md">
-          <div className="text-[10px] text-text-400 px-1">
-            <span className="opacity-70">Current: </span>
-            <span className="font-mono text-text-300">{inputValue}</span>
+        {/* Footer */}
+        <div className="p-3 border-t border-border-200/50 flex items-center justify-between shrink-0">
+          <div className="text-[10px] text-text-400 truncate flex-1 mr-4 font-mono">
+            {inputValue}
           </div>
           <button
             onClick={handleConfirmCurrent}
-            className="flex items-center gap-2 px-4 py-2 bg-bg-000 hover:bg-accent-main-100/10 border border-border-200 hover:border-accent-main-100/30 text-text-100 hover:text-accent-main-100 rounded-xl transition-all duration-200 text-xs font-medium shadow-sm hover:shadow-md active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-000 hover:bg-accent-main-100/10 border border-border-200 hover:border-accent-main-100/30 text-text-200 hover:text-accent-main-100 rounded-lg transition-colors text-xs font-medium"
           >
-            <PlusIcon className="w-3.5 h-3.5" />
-            Add current directory
+            <PlusIcon className="w-3 h-3" />
+            Add current
           </button>
         </div>
       </div>
@@ -421,3 +377,39 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
   )
 }
 
+// ============================================
+// ListItem Component
+// ============================================
+
+interface ListItemProps {
+  id: string
+  icon: React.ReactNode
+  label: string
+  isSelected: boolean
+  onClick: () => void
+  onMouseEnter: () => void
+  action?: React.ReactNode
+}
+
+function ListItem({ id, icon, label, isSelected, onClick, onMouseEnter, action }: ListItemProps) {
+  return (
+    <div
+      id={id}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      className={`
+        flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all duration-150
+        ${isSelected 
+          ? 'bg-bg-000 shadow-sm ring-1 ring-border-200/50 text-text-100' 
+          : 'text-text-300 hover:bg-bg-200/50'
+        }
+      `}
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={isSelected ? 'text-accent-main-100' : 'text-text-400'}>{icon}</span>
+        <span className="text-sm truncate">{label}</span>
+      </div>
+      {action}
+    </div>
+  )
+}
