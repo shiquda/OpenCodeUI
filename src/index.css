@@ -387,13 +387,6 @@ body {
   font-family: var(--font-ui-sans);
 }
 
-/* Disable all transitions during theme switch */
-[data-theme-transition="off"] *,
-[data-theme-transition="off"] {
-  transition: none !important;
-  animation: none !important;
-}
-
 /* Theme View Transition (Circular Reveal) */
 ::view-transition-old(root),
 ::view-transition-new(root) {

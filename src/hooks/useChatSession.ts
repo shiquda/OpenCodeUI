@@ -137,6 +137,12 @@ export function useChatSession({ chatAreaRef, currentModel }: UseChatSessionOpti
       chatAreaRef.current?.scrollToBottomIfAtBottom()
     },
   })
+
+  const handleVisibleMessageIdsChange = useCallback((ids: string[]) => {
+    if (!routeSessionId || ids.length === 0) return
+    messageStore.prefetchMessageParts(routeSessionId, ids)
+    messageStore.evictMessageParts(routeSessionId, ids)
+  }, [routeSessionId])
   
   // Poll pending permissions
   useEffect(() => {
@@ -354,5 +360,6 @@ export function useChatSession({ chatAreaRef, currentModel }: UseChatSessionOpti
     handleRedoWithAnimation,
     handleSelectSession,
     handleNewSession,
+    handleVisibleMessageIdsChange,
   }
 }

@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect } from 'react'
 import { ChevronDownIcon, LightbulbIcon, SpinnerIcon } from '../../../components/Icons'
 import { ScrollArea } from '../../../components/ui'
+import { useDelayedRender } from '../../../hooks'
 import { useSmoothStream } from '../../../hooks/useSmoothStream'
 import type { ReasoningPart } from '../../../types/message'
 
@@ -21,9 +22,10 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
   const { displayText } = useSmoothStream(
     part.text || '',
     !!isPartStreaming,
-    { charDelay: 6 }  // 稍快一点，因为是思考过程
+    { charDelay: 6, disableAnimation: !isPartStreaming }  // 稍快一点，因为是思考过程
   )
   const [expanded, setExpanded] = useState(false)
+  const shouldRenderBody = useDelayedRender(expanded)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   
   // 自动控制展开状态
@@ -77,15 +79,17 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
         </span>
       </button>
       
-      <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-        expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-      }`}>
-        <div className="overflow-hidden">
-<ScrollArea ref={scrollAreaRef} maxHeight={192} className="border-t border-border-300/20 bg-bg-200/30">
-                            <div className="px-3 py-2 text-text-300 text-xs font-mono whitespace-pre-wrap">
-                              {displayText}
-                            </div>
-                          </ScrollArea>
+        <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}>
+          <div className="overflow-hidden">
+            {shouldRenderBody && (
+              <ScrollArea ref={scrollAreaRef} maxHeight={192} className="border-t border-border-300/20 bg-bg-200/30">
+                <div className="px-3 py-2 text-text-300 text-xs font-mono whitespace-pre-wrap">
+                  {displayText}
+                </div>
+              </ScrollArea>
+          )}
         </div>
       </div>
     </div>

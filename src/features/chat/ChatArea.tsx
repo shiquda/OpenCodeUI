@@ -5,6 +5,7 @@
 import { useRef, useImperativeHandle, forwardRef, useState, memo, useCallback, useEffect, useMemo } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { MessageRenderer } from '../message'
+import { messageStore } from '../../store'
 import type { Message } from '../../types/message'
 import {
   VIRTUOSO_START_INDEX,
@@ -13,6 +14,7 @@ import {
   SCROLL_RESUME_DELAY_MS,
   AT_BOTTOM_THRESHOLD_PX,
   VIRTUOSO_OVERSCAN_PX,
+  MESSAGE_PREFETCH_BUFFER,
 } from '../../constants'
 
 interface ChatAreaProps {
@@ -28,6 +30,7 @@ interface ChatAreaProps {
   canUndo?: boolean
   registerMessage?: (id: string, element: HTMLElement | null) => void
   isWideMode?: boolean
+  onVisibleMessageIdsChange?: (ids: string[]) => void
 }
 
 export type ChatAreaHandle = {
@@ -42,6 +45,7 @@ export type ChatAreaHandle = {
 
 // 检查消息是否有可见内容
 function messageHasContent(msg: Message): boolean {
+  if (msg.parts.length === 0) return true
   return msg.parts.some(part => {
     switch (part.type) {
       case 'text':
@@ -73,6 +77,7 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
   canUndo,
   registerMessage,
   isWideMode = false,
+  onVisibleMessageIdsChange,
 }, ref) => {
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   // 外部滚动容器
@@ -236,16 +241,20 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
       <div ref={handleRef} className={`w-full ${maxWidthClass} mx-auto px-4 py-3 transition-[max-width] duration-300 ease-in-out`}>
         <div className={`flex ${msg.info.role === 'user' ? 'justify-end' : 'justify-start'}`}>
           <div className={`min-w-0 group ${msg.info.role === 'assistant' ? 'w-full' : ''}`}>
-            <MessageRenderer 
-              message={msg} 
+            <MessageRenderer
+              message={msg}
               onUndo={onUndo}
               canUndo={canUndo}
+              onEnsureParts={(id) => {
+                if (!sessionId) return
+                void messageStore.hydrateMessageParts(sessionId, id)
+              }}
             />
           </div>
         </div>
       </div>
     )
-  }, [registerMessage, onUndo, canUndo, isWideMode])
+  }, [registerMessage, onUndo, canUndo, isWideMode, sessionId])
 
   return (
     <div className="h-full overflow-hidden">
@@ -274,6 +283,17 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
             components={{
               Header: () => <div className="h-20" />,
               Footer: () => <div className="h-64" />
+            }}
+            rangeChanged={(range) => {
+              if (!onVisibleMessageIdsChange) return
+              const start = Math.max(0, range.startIndex - MESSAGE_PREFETCH_BUFFER)
+              const end = Math.min(visibleMessages.length - 1, range.endIndex + MESSAGE_PREFETCH_BUFFER)
+              const ids: string[] = []
+              for (let i = start; i <= end; i++) {
+                const id = visibleMessages[i]?.info.id
+                if (id) ids.push(id)
+              }
+              onVisibleMessageIdsChange(ids)
             }}
             itemContent={(_, msg) => renderMessage(msg)}
           />

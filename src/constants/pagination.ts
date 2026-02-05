@@ -11,8 +11,14 @@ export const DEFAULT_PAGE_SIZE = 20
 /** 历史加载批次大小 */
 export const HISTORY_LOAD_BATCH_SIZE = 15
 
-/** 单个 session 在内存中的最大消息数 */
-export const MAX_HISTORY_MESSAGES = 2000
+/** 单个 session 在内存中的最大消息数（极大值用于避免截断） */
+export const MAX_HISTORY_MESSAGES = 1000000
+
+/** 持久化消息分段写入阈值（字符数） */
+export const MESSAGE_PART_PERSIST_THRESHOLD = 20000
+
+/** 可见区域预取缓冲数量 */
+export const MESSAGE_PREFETCH_BUFFER = 30
 
 /** 默认搜索结果限制 */
 export const DEFAULT_SEARCH_LIMIT = 50

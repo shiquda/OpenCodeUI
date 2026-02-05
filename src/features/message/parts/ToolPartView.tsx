@@ -1,6 +1,7 @@
 import { memo, useState } from 'react'
 import { ChevronDownIcon } from '../../../components/Icons'
 import type { ToolPart } from '../../../types/message'
+import { useDelayedRender } from '../../../hooks'
 import { 
   getToolIcon, 
   extractToolData, 
@@ -25,6 +26,7 @@ export const ToolPartView = memo(function ToolPartView({ part, isFirst = false, 
   const [expanded, setExpanded] = useState(() => {
     return part.state.status === 'running' || part.state.status === 'pending'
   })
+  const shouldRenderBody = useDelayedRender(expanded)
   
   const { state, tool: toolName } = part
   const title = state.title || ''
@@ -109,13 +111,15 @@ export const ToolPartView = memo(function ToolPartView({ part, isFirst = false, 
         </button>
 
         {/* Body */}
-        <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-        }`}>
-          <div className="overflow-hidden">
-            <div className="p-3">
-              <ToolBody part={part} />
-            </div>
+          <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+            expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          }`}>
+            <div className="overflow-hidden">
+              {shouldRenderBody && (
+                <div className="p-3">
+                  <ToolBody part={part} />
+                </div>
+            )}
           </div>
         </div>
       </div>

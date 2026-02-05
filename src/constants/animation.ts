@@ -59,7 +59,8 @@ export const LAG_THRESHOLD_LARGE = 300
 // ============================================
 
 /** 主题切换时禁用过渡的时间窗口 */
-export const THEME_SWITCH_DISABLE_MS = 200
+export const THEME_SWITCH_DISABLE_MS = 450
 
-/** 超过该消息数时禁用 View Transition 动画 */
-export const THEME_ANIMATION_MAX_MESSAGES = 120
+
+/** Streaming 状态下 Markdown 渲染阈值 */
+export const STREAMING_MARKDOWN_THRESHOLD = 5000

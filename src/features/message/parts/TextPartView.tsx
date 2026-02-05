@@ -1,5 +1,7 @@
 import { memo } from 'react'
 import { MarkdownRenderer } from '../../../components'
+import { useMemo } from 'react'
+import { STREAMING_MARKDOWN_THRESHOLD } from '../../../constants'
 import { useSmoothStream } from '../../../hooks/useSmoothStream'
 import type { TextPart } from '../../../types/message'
 
@@ -17,11 +19,12 @@ interface TextPartViewProps {
  * - 不管后端推送多块多慢，用户看到的始终是均匀流畅的
  */
 export const TextPartView = memo(function TextPartView({ part, isStreaming = false }: TextPartViewProps) {
+  const shouldAnimate = isStreaming && !part.time?.end
   // 使用 smooth streaming hook
   const { displayText, isAnimating } = useSmoothStream(
     part.text || '',
     isStreaming,
-    { charDelay: 8 }  // 8ms per char ≈ 125 chars/sec
+    { charDelay: 8, disableAnimation: !shouldAnimate }  // 8ms per char ≈ 125 chars/sec
   )
 
   // 跳过空文本（除非正在 streaming 或动画中）
@@ -30,9 +33,17 @@ export const TextPartView = memo(function TextPartView({ part, isStreaming = fal
   // 跳过 synthetic 文本（系统上下文，单独处理）
   if (part.synthetic) return null
   
+  const shouldUseMarkdown = useMemo(() => !isStreaming && displayText.length < STREAMING_MARKDOWN_THRESHOLD, [isStreaming, displayText.length])
+
   return (
     <div className="font-claude-response">
-      <MarkdownRenderer content={displayText} />
+      {shouldUseMarkdown ? (
+        <MarkdownRenderer content={displayText} />
+      ) : (
+        <div className="whitespace-pre-wrap break-words text-sm text-text-200 leading-relaxed">
+          {displayText}
+        </div>
+      )}
     </div>
   )
 })

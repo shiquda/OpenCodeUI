@@ -14,7 +14,7 @@ import {
   type ApiMessageWithParts,
 } from '../api'
 import { revertErrorHandler } from '../utils'
-import { MAX_HISTORY_MESSAGES } from '../constants'
+import { INITIAL_MESSAGE_LIMIT } from '../constants'
 
 /** 将 API 消息转换为 UI Message */
 function convertApiToMessage(apiMsg: ApiMessageWithParts): Message {
@@ -105,7 +105,7 @@ export function useRevertState({
       await animateUndo(messageIdsToRemove)
       
       // 3. 获取 API 消息
-      const apiMessages = await getSessionMessages(routeSessionId, MAX_HISTORY_MESSAGES)
+       const apiMessages = await getSessionMessages(routeSessionId, Math.max(INITIAL_MESSAGE_LIMIT, 200))
       const targetIndex = apiMessages.findIndex(m => m.info.id === userMessageId)
       
       if (targetIndex === -1) {
@@ -176,7 +176,7 @@ export function useRevertState({
       setRevertHistory(newHistory)
       
       // 3. 重新加载消息
-      const apiMessages = await getSessionMessages(routeSessionId, MAX_HISTORY_MESSAGES)
+       const apiMessages = await getSessionMessages(routeSessionId, Math.max(INITIAL_MESSAGE_LIMIT, 200))
       
       // 如果还有 revert 状态，需要过滤消息
       if (updatedSession.revert?.messageID) {
@@ -205,7 +205,7 @@ export function useRevertState({
       setRevertedMessage(undefined)
       
       // 重新加载所有消息
-      const apiMessages = await getSessionMessages(routeSessionId, MAX_HISTORY_MESSAGES)
+       const apiMessages = await getSessionMessages(routeSessionId, Math.max(INITIAL_MESSAGE_LIMIT, 200))
       setMessages(apiMessages.map(convertApiToMessage))
     } catch (error) {
       revertErrorHandler('redo all', error)

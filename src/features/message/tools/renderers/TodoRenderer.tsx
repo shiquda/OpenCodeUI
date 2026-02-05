@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDownIcon, CheckIcon, ClockIcon, CloseIcon, CircleIcon } from '../../../../components/Icons'
 import type { ToolPart } from '../../../../types/message'
 import type { ToolRendererProps } from '../types'
+import { useDelayedRender } from '../../../../hooks'
 
 // ============================================
 // Types
@@ -34,6 +35,7 @@ export function TodoRenderer({ part }: ToolRendererProps) {
 
 function TodoList({ todos }: { todos: TodoItem[] }) {
   const [collapsed, setCollapsed] = useState(false)
+  const shouldRenderBody = useDelayedRender(!collapsed)
   const completed = todos.filter(t => t.status === 'completed').length
   const total = todos.length
   
@@ -58,24 +60,26 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
         collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
       }`}>
         <div className="overflow-hidden">
-          <div className="divide-y divide-border-200/30">
-            {todos.map(todo => (
-              <div 
-                key={todo.id}
-                className={`flex items-start gap-2 px-3 py-2 ${
-                  todo.status === 'completed' ? 'text-text-500' : 'text-text-200'
-                }`}
-              >
-                <span className="shrink-0 mt-0.5">{getTodoIcon(todo.status)}</span>
-                <span className={todo.status === 'completed' ? 'line-through' : ''}>
-                  {todo.content}
-                </span>
-                {todo.priority === 'high' && todo.status !== 'completed' && (
-                  <span className="text-[10px] text-warning-100 bg-warning-100/10 px-1 rounded ml-auto shrink-0">!</span>
-                )}
-              </div>
-            ))}
-          </div>
+          {shouldRenderBody && (
+            <div className="divide-y divide-border-200/30">
+              {todos.map(todo => (
+                <div 
+                  key={todo.id}
+                  className={`flex items-start gap-2 px-3 py-2 ${
+                    todo.status === 'completed' ? 'text-text-500' : 'text-text-200'
+                  }`}
+                >
+                  <span className="shrink-0 mt-0.5">{getTodoIcon(todo.status)}</span>
+                  <span className={todo.status === 'completed' ? 'line-through' : ''}>
+                    {todo.content}
+                  </span>
+                  {todo.priority === 'high' && todo.status !== 'completed' && (
+                    <span className="text-[10px] text-warning-100 bg-warning-100/10 px-1 rounded ml-auto shrink-0">!</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

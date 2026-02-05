@@ -22,7 +22,7 @@ export const SCROLL_RESUME_DELAY_MS = 500
 export const AT_BOTTOM_THRESHOLD_PX = 60
 
 /** Virtuoso 预加载区域 */
-export const VIRTUOSO_OVERSCAN_PX = 500
+export const VIRTUOSO_OVERSCAN_PX = 280
 
 /** 加载更多触发阈值 */
 export const LOAD_MORE_THRESHOLD_PX = 100

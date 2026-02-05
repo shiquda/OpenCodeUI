@@ -536,7 +536,7 @@ function truncateHtml(html: string): { html: string; truncated: boolean } {
   return { html: truncated, truncated: true }
 }
 
-function CodePreview({ code, language, isResizing = false }: CodePreviewProps) {
+export function CodePreview({ code, language, isResizing = false }: CodePreviewProps) {
   const lines = useMemo(() => code.split('\n'), [code])
   
   // text 类型不走高亮，resize 时也禁用以提高性能

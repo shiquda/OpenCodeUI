@@ -1,6 +1,8 @@
 import { memo, useState } from 'react'
 import { ChevronDownIcon, UndoIcon } from '../../components/Icons'
+import { useEffect, useMemo } from 'react'
 import { CopyButton } from '../../components/ui'
+import { useDelayedRender } from '../../hooks'
 import {
   TextPartView,
   ReasoningPartView,
@@ -33,9 +35,10 @@ interface MessageRendererProps {
   message: Message
   onUndo?: (userMessageId: string) => void
   canUndo?: boolean
+  onEnsureParts?: (messageId: string) => void
 }
 
-export const MessageRenderer = memo(function MessageRenderer({ message, onUndo, canUndo }: MessageRendererProps) {
+export const MessageRenderer = memo(function MessageRenderer({ message, onUndo, canUndo, onEnsureParts }: MessageRendererProps) {
   const { info } = message
   const isUser = info.role === 'user'
   
@@ -43,7 +46,7 @@ export const MessageRenderer = memo(function MessageRenderer({ message, onUndo, 
     return <UserMessageView message={message} onUndo={onUndo} canUndo={canUndo} />
   }
   
-  return <AssistantMessageView message={message} />
+  return <AssistantMessageView message={message} onEnsureParts={onEnsureParts} />
 })
 
 // ============================================
@@ -142,11 +145,17 @@ const UserMessageView = memo(function UserMessageView({ message, onUndo, canUndo
 // Assistant Message View
 // ============================================
 
-const AssistantMessageView = memo(function AssistantMessageView({ message }: { message: Message }) {
+const AssistantMessageView = memo(function AssistantMessageView({ message, onEnsureParts }: { message: Message; onEnsureParts?: (messageId: string) => void }) {
   const { parts, isStreaming, info } = message
+
+  useEffect(() => {
+    if (parts.length === 0 && onEnsureParts) {
+      onEnsureParts(message.info.id)
+    }
+  }, [parts.length, onEnsureParts, message.info.id])
   
   // 收集连续的 tool parts 合并渲染
-  const renderItems = groupPartsForRender(parts)
+  const renderItems = useMemo(() => groupPartsForRender(parts), [parts])
   
   // 计算完整文本用于复制
   const fullText = parts
@@ -156,6 +165,15 @@ const AssistantMessageView = memo(function AssistantMessageView({ message }: { m
   
   // 检查消息级别错误
   const messageError = (info as AssistantMessageInfo).error
+
+  if (!isStreaming && parts.length === 0) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-text-500 py-2">
+        <span className="w-2 h-2 rounded-full bg-text-500 animate-pulse" />
+        Loading message...
+      </div>
+    )
+  }
   
   return (
     <div className="flex flex-col gap-2 w-full group">
@@ -166,7 +184,7 @@ const AssistantMessageView = memo(function AssistantMessageView({ message }: { m
         </div>
       )}
 
-      {renderItems.map((item) => {
+      {renderItems.map((item: RenderItem) => {
         if (item.type === 'tool-group') {
           return (
             <ToolGroup 
@@ -254,6 +272,7 @@ interface ToolGroupProps {
 
 const ToolGroup = memo(function ToolGroup({ parts, stepFinish }: ToolGroupProps) {
   const [expanded, setExpanded] = useState(true)
+  const shouldRenderBody = useDelayedRender(expanded)
   
   const doneCount = parts.filter(p => p.state.status === 'completed').length
   const totalCount = parts.length
@@ -285,19 +304,23 @@ const ToolGroup = memo(function ToolGroup({ parts, stepFinish }: ToolGroupProps)
         expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
       }`}>
         <div className="flex flex-col overflow-hidden">
-          {parts.map((part, idx) => (
-            <ToolPartView 
-              key={part.id} 
-              part={part} 
-              isFirst={idx === 0}
-              isLast={idx === parts.length - 1}
-            />
-          ))}
-          {/* Step finish at bottom of group */}
-          {stepFinish && (
-            <div className="px-3 pt-1">
-              <StepFinishPartView part={stepFinish} />
-            </div>
+          {shouldRenderBody && (
+            <>
+              {parts.map((part, idx) => (
+                <ToolPartView 
+                  key={part.id} 
+                  part={part} 
+                  isFirst={idx === 0}
+                  isLast={idx === parts.length - 1}
+                />
+              ))}
+              {/* Step finish at bottom of group */}
+              {stepFinish && (
+                <div className="px-3 pt-1">
+                  <StepFinishPartView part={stepFinish} />
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

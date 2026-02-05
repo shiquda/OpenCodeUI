@@ -2,17 +2,18 @@
  * ContentBlock - 通用内容展示容器
  * 
  * 根据内容类型自动选择渲染器：
- * - 普通代码/文本 -> CodeRenderer
- * - Diff -> DiffRenderer
+ * - 普通代码/文本 -> CodePreview
+ * - Diff -> DiffViewer
  * - Loading 状态 -> Skeleton
  * - 后续可扩展更多类型
  */
 
-import { memo, useState, useEffect, useMemo } from 'react'
+import { memo, useState, useMemo, useEffect, useRef } from 'react'
 import { diffLines } from 'diff'
 import { ChevronDownIcon, MaximizeIcon } from './Icons'
 import { CopyButton } from './ui'
-import { useSyntaxHighlight } from '../hooks/useSyntaxHighlight'
+import { DiffViewer, extractContentFromUnifiedDiff, type ViewMode } from './DiffViewer'
+import { CodePreview } from './FileExplorer'
 import { detectLanguage } from '../utils/languageUtils'
 import { DiffModal } from './DiffModal'
 
@@ -74,6 +75,8 @@ export const ContentBlock = memo(function ContentBlock({
 }: ContentBlockProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const [diffModalOpen, setDiffModalOpen] = useState(false)
+  const [diffViewMode, setDiffViewMode] = useState<ViewMode>('split')
+  const contentRef = useRef<HTMLDivElement>(null)
   
   const isError = variant === 'error'
   const isDiff = !!diff
@@ -109,6 +112,29 @@ export const ContentBlock = memo(function ContentBlock({
     }
     return { additions, deletions }
   }, [isDiff, diff, providedDiffStats])
+
+  const resolvedDiff = useMemo(() => {
+    if (!diff) return null
+    if (typeof diff === 'object') return diff
+    return extractContentFromUnifiedDiff(diff)
+  }, [diff])
+
+  useEffect(() => {
+    if (!isDiff) return
+    const container = contentRef.current
+    if (!container) return
+
+    const updateViewMode = () => {
+      const width = container.clientWidth
+      const nextMode: ViewMode = width < 720 ? 'unified' : 'split'
+      setDiffViewMode(prev => (prev === nextMode ? prev : nextMode))
+    }
+
+    updateViewMode()
+    const observer = new ResizeObserver(updateViewMode)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [isDiff])
 
   return (
     <div className={`border rounded-lg overflow-hidden text-xs ${
@@ -192,20 +218,19 @@ export const ContentBlock = memo(function ContentBlock({
           )}
           
           {/* Actual content */}
-          {hasContent && (
-            <div className="relative group/content overflow-auto custom-scrollbar" style={{ maxHeight }}>
+          {hasContent && !collapsed && (
+            <div ref={contentRef} className="relative group/content overflow-auto custom-scrollbar" style={{ maxHeight }}>
               {/* Copy button - 悬浮在内容区右上角 */}
               {content && <CopyButton text={content} position="absolute" groupName="content" />}
               
-              {isDiff ? (
-                <DiffRenderer 
-                  before={typeof diff === 'object' ? diff.before : undefined} 
-                  after={typeof diff === 'object' ? diff.after : undefined}
-                  unifiedDiff={typeof diff === 'string' ? diff : undefined}
-                  language={lang} 
-                />
+              {isDiff && resolvedDiff ? (
+                <div style={{ height: maxHeight }}>
+                  <DiffViewer before={resolvedDiff.before} after={resolvedDiff.after} language={lang} viewMode={diffViewMode} />
+                </div>
               ) : content ? (
-                <CodeRenderer content={content} language={lang} isError={isError} />
+                <div style={{ height: maxHeight }}>
+                  <CodePreview code={content} language={lang} />
+                </div>
               ) : stats?.exit !== undefined ? (
                 <div className="px-3 py-2 text-text-500 font-mono">
                   {stats.exit === 0 ? 'Completed successfully' : 'No output'}
@@ -230,319 +255,3 @@ export const ContentBlock = memo(function ContentBlock({
     </div>
   )
 })
-
-// ============================================
-// CodeRenderer - 代码渲染器
-// ============================================
-
-interface CodeRendererProps {
-  content: string
-  language: string
-  isError?: boolean
-}
-
-const CodeRenderer = memo(function CodeRenderer({ content, language, isError }: CodeRendererProps) {
-  // 性能优化：大内容不高亮
-  const shouldHighlight = content.length < 50000
-  const { output: html } = useSyntaxHighlight(content, { lang: language, enabled: shouldHighlight })
-
-  if (html) {
-    return (
-      <div
-        className={`
-          [&_pre]:p-3 [&_pre]:m-0 [&_pre]:!bg-transparent
-          [&_.shiki]:!bg-transparent
-          [&_code]:font-mono leading-relaxed
-          ${isError ? '[&_span]:!text-danger-100' : ''}
-        `}
-        suppressHydrationWarning
-        dangerouslySetInnerHTML={{ __html: html as string }}
-      />
-    )
-  }
-
-  return (
-    <pre className={`p-3 m-0 whitespace-pre-wrap break-all font-mono ${isError ? 'text-danger-100' : 'text-text-300'}`}>
-      {content}
-    </pre>
-  )
-})
-
-// ============================================
-// DiffRenderer - Diff 渲染器
-// ============================================
-
-interface DiffLine {
-  type: 'add' | 'delete' | 'context'
-  content: string
-  oldLineNo?: number
-  newLineNo?: number
-}
-
-interface DiffRendererProps {
-  before?: string
-  after?: string
-  unifiedDiff?: string
-  language: string
-}
-
-const DiffRenderer = memo(function DiffRenderer({ before, after, unifiedDiff, language }: DiffRendererProps) {
-  // 性能优化：大内容不高亮
-  const totalLength = (before?.length || 0) + (after?.length || 0) + (unifiedDiff?.length || 0)
-  const shouldHighlight = totalLength < 50000
-  
-  // 仅在 before/after 模式下使用
-  const { output: oldTokens } = useSyntaxHighlight(before || '', { lang: language, mode: 'tokens', enabled: shouldHighlight && !!before })
-  const { output: newTokens } = useSyntaxHighlight(after || '', { lang: language, mode: 'tokens', enabled: shouldHighlight && !!after })
-  
-  // 仅在 unifiedDiff 模式下使用 - 提取出的 before/after 用于高亮
-  const [unifiedParts, setUnifiedParts] = useState<{ before: string, after: string } | null>(null)
-  
-  useEffect(() => {
-    if (unifiedDiff) {
-      // 提取 before/after 用于语法高亮
-      // 必须跳过 diff header 行，否则 tokens 索引会错位
-      let b = '', a = ''
-      const lines = unifiedDiff.split('\n')
-      for (const line of lines) {
-        // 跳过 diff header 行
-        if (line.startsWith('---') || line.startsWith('+++') || 
-            line.startsWith('Index:') || line.startsWith('===') ||
-            line.startsWith('@@') || line.startsWith('\\ No newline')) {
-          continue
-        }
-        // 只处理实际的 diff 内容行
-        if (line.startsWith('-')) b += line.slice(1) + '\n'
-        else if (line.startsWith('+')) a += line.slice(1) + '\n'
-        else if (line.startsWith(' ')) {
-          b += line.slice(1) + '\n'
-          a += line.slice(1) + '\n'
-        }
-      }
-      setUnifiedParts({ before: b, after: a })
-    }
-  }, [unifiedDiff])
-  
-  const { output: unifiedOldTokens } = useSyntaxHighlight(unifiedParts?.before || '', { lang: language, mode: 'tokens', enabled: shouldHighlight && !!unifiedParts })
-  const { output: unifiedNewTokens } = useSyntaxHighlight(unifiedParts?.after || '', { lang: language, mode: 'tokens', enabled: shouldHighlight && !!unifiedParts })
-  
-  const [lines, setLines] = useState<DiffLine[]>([])
-
-  useEffect(() => {
-    // 模式 1: Unified Diff (直接解析，不计算 diff)
-    if (unifiedDiff) {
-      const result: DiffLine[] = []
-      const diffLinesArr = unifiedDiff.split('\n')
-      
-      // 如果需要高亮
-      let oldHtmlLines: string[] = []
-      let newHtmlLines: string[] = []
-      
-      if (shouldHighlight && unifiedOldTokens && unifiedNewTokens) {
-        oldHtmlLines = tokensToHtmlLines(unifiedOldTokens as any[][])
-        newHtmlLines = tokensToHtmlLines(unifiedNewTokens as any[][])
-      }
-      
-      let oldLineNo = 1
-      let newLineNo = 1
-      let oldIdx = 0
-      let newIdx = 0
-      
-      // 解析 unified diff header 寻找起始行号 (@@ -1,5 +1,5 @@)
-      for (const line of diffLinesArr) {
-        if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('Index:') || line.startsWith('===')) {
-          continue
-        }
-        
-        if (line.startsWith('@@')) {
-          // Parse hunk header: @@ -oldStart,oldLen +newStart,newLen @@
-          const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
-          if (match) {
-            oldLineNo = parseInt(match[1], 10)
-            newLineNo = parseInt(match[2], 10)
-            
-            // 渲染一个分隔符行? 或者只是更新行号
-            result.push({ 
-              type: 'context', 
-              content: '<span class="text-text-500 opacity-50">...</span>',
-              oldLineNo: undefined,
-              newLineNo: undefined
-            })
-          }
-          continue
-        }
-        
-        if (line.startsWith('-')) {
-          const content = shouldHighlight && oldHtmlLines[oldIdx] 
-            ? oldHtmlLines[oldIdx] 
-            : escapeHtml(line.slice(1))
-            
-          result.push({ 
-            type: 'delete', 
-            content, 
-            oldLineNo: oldLineNo++ 
-          })
-          oldIdx++
-        } else if (line.startsWith('+')) {
-          const content = shouldHighlight && newHtmlLines[newIdx] 
-            ? newHtmlLines[newIdx] 
-            : escapeHtml(line.slice(1))
-            
-          result.push({ 
-            type: 'add', 
-            content, 
-            newLineNo: newLineNo++ 
-          })
-          newIdx++
-        } else if (line.startsWith(' ')) {
-          const content = shouldHighlight && newHtmlLines[newIdx] 
-            ? newHtmlLines[newIdx] 
-            : escapeHtml(line.slice(1))
-            
-          result.push({ 
-            type: 'context', 
-            content, 
-            oldLineNo: oldLineNo++, 
-            newLineNo: newLineNo++ 
-          })
-          oldIdx++
-          newIdx++
-        }
-      }
-      
-      setLines(result)
-      return
-    }
-    
-    // 模式 2: Before/After (需要计算 diff)
-    if (!before || !after) return
-
-    const changes = diffLines(before, after)
-    
-    if (!shouldHighlight || !oldTokens || !newTokens) {
-      // 无高亮模式
-      const result: DiffLine[] = []
-      let oldLineNo = 1, newLineNo = 1
-      
-      for (const change of changes) {
-        const changeLines = (change.value || '').replace(/\n$/, '').split('\n')
-        
-        for (const line of changeLines) {
-          if (change.added) {
-            result.push({ type: 'add', content: escapeHtml(line), newLineNo: newLineNo++ })
-          } else if (change.removed) {
-            result.push({ type: 'delete', content: escapeHtml(line), oldLineNo: oldLineNo++ })
-          } else {
-            result.push({ type: 'context', content: escapeHtml(line), oldLineNo: oldLineNo++, newLineNo: newLineNo++ })
-          }
-        }
-      }
-      setLines(result)
-      return
-    }
-
-    // 带高亮模式
-    const oldHtmlLines = tokensToHtmlLines(oldTokens as any[][])
-    const newHtmlLines = tokensToHtmlLines(newTokens as any[][])
-    
-    const result: DiffLine[] = []
-    let oldIdx = 0, newIdx = 0
-    
-    for (const change of changes) {
-      const count = change.count || 0
-      
-      if (change.removed) {
-        for (let i = 0; i < count; i++) {
-          result.push({ type: 'delete', content: oldHtmlLines[oldIdx + i] || ' ', oldLineNo: oldIdx + i + 1 })
-        }
-        oldIdx += count
-      } else if (change.added) {
-        for (let i = 0; i < count; i++) {
-          result.push({ type: 'add', content: newHtmlLines[newIdx + i] || ' ', newLineNo: newIdx + i + 1 })
-        }
-        newIdx += count
-      } else {
-        for (let i = 0; i < count; i++) {
-          result.push({
-            type: 'context',
-            content: newHtmlLines[newIdx + i] || ' ',
-            oldLineNo: oldIdx + i + 1,
-            newLineNo: newIdx + i + 1,
-          })
-        }
-        oldIdx += count
-        newIdx += count
-      }
-    }
-    
-    setLines(result)
-  }, [before, after, unifiedDiff, oldTokens, newTokens, unifiedOldTokens, unifiedNewTokens, shouldHighlight])
-
-  if (lines.length === 0) {
-    return <div className="p-3 text-text-500 font-mono animate-pulse">Loading...</div>
-  }
-
-  return (
-    <table className="w-full border-collapse table-fixed">
-      <colgroup>
-        <col className="w-10" />
-        <col className="w-10" />
-        <col />
-      </colgroup>
-      <tbody>
-        {lines.map((line, idx) => {
-          const rowBgClass = line.type === 'add' ? 'bg-success-bg' :
-                             line.type === 'delete' ? 'bg-danger-bg' : ''
-          return (
-          <tr
-            key={idx}
-          >
-            {/* Old line number - 只在非 add 时显示 */}
-            <td className={`px-2 py-0.5 text-right text-text-500 select-none tabular-nums font-mono text-[11px] align-top border-r border-border-300/20 ${rowBgClass}`}>
-              {line.type !== 'add' && line.oldLineNo}
-            </td>
-            {/* New line number - 只在非 delete 时显示 */}
-            <td className={`px-2 py-0.5 text-right text-text-500 select-none tabular-nums font-mono text-[11px] align-top border-r border-border-300/20 ${rowBgClass}`}>
-              {line.type !== 'delete' && line.newLineNo}
-            </td>
-            {/* Content with inline +/- indicator */}
-            <td
-              className={`px-3 py-0.5 font-mono whitespace-pre break-all align-top relative ${rowBgClass}`}
-              suppressHydrationWarning
-            >
-              {/* +/- indicator */}
-              {(line.type === 'add' || line.type === 'delete') && (
-                <span className={`absolute left-0.5 select-none font-bold opacity-70 ${
-                  line.type === 'add' ? 'text-success-100' : 'text-danger-100'
-                }`}>
-                  {line.type === 'add' ? '+' : '-'}
-                </span>
-              )}
-              <span dangerouslySetInnerHTML={{ __html: line.content }} />
-            </td>
-          </tr>
-        )})}
-      </tbody>
-    </table>
-  )
-})
-
-// ============================================
-// Helpers
-// ============================================
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function tokensToHtmlLines(tokenLines: any[][]): string[] {
-  return tokenLines.map(lineTokens => {
-    if (!lineTokens || lineTokens.length === 0) return ' '
-    return lineTokens.map(t => 
-      `<span style="color:${t.color}">${escapeHtml(t.content)}</span>`
-    ).join('')
-  })
-}

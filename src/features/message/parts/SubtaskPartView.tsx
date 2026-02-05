@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import type { SubtaskPart } from '../../../types/message'
 import { useChildSessions, type ChildSessionInfo } from '../../../store'
 import { useRouter } from '../../../hooks/useRouter'
+import { useDelayedRender } from '../../../hooks'
 
 interface SubtaskPartViewProps {
   part: SubtaskPart
@@ -16,6 +17,7 @@ interface SubtaskPartViewProps {
  */
 export const SubtaskPartView = memo(function SubtaskPartView({ part }: SubtaskPartViewProps) {
   const [expanded, setExpanded] = useState(false)
+  const shouldRenderBody = useDelayedRender(expanded)
   const { navigateToSession } = useRouter()
   
   // 获取子 session 信息（如果已创建）
@@ -107,44 +109,46 @@ export const SubtaskPartView = memo(function SubtaskPartView({ part }: SubtaskPa
         expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
       }`}>
         <div className="overflow-hidden">
-          <div className="px-4 py-3 border-t border-border-200/40 space-y-3">
-            {/* Prompt preview */}
-            <div>
-              <p className="text-[10px] text-text-500 uppercase tracking-wider mb-1">Task</p>
-              <p className="text-xs text-text-300 whitespace-pre-wrap line-clamp-4">
-                {part.prompt}
-              </p>
+          {shouldRenderBody && (
+            <div className="px-4 py-3 border-t border-border-200/40 space-y-3">
+              {/* Prompt preview */}
+              <div>
+                <p className="text-[10px] text-text-500 uppercase tracking-wider mb-1">Task</p>
+                <p className="text-xs text-text-300 whitespace-pre-wrap line-clamp-4">
+                  {part.prompt}
+                </p>
+              </div>
+
+              {/* Model info */}
+              {part.model && (
+                <div className="flex items-center gap-2 text-[10px] text-text-500">
+                  <ModelIcon className="w-3 h-3" />
+                  <span>{part.model.providerID}/{part.model.modelID}</span>
+                </div>
+              )}
+
+              {/* Command (if slash command) */}
+              {part.command && (
+                <div className="flex items-center gap-2 text-[10px] text-text-500">
+                  <CommandIcon className="w-3 h-3" />
+                  <span className="font-mono">{part.command}</span>
+                </div>
+              )}
+
+              {/* Child session info */}
+              {childSession && (
+                <div className="pt-2 border-t border-border-200/30">
+                  <button
+                    onClick={handleEnter}
+                    className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-accent-main-100 hover:bg-accent-main-100/10 rounded-lg transition-colors"
+                  >
+                    <EnterIcon className="w-3.5 h-3.5" />
+                    View full session
+                  </button>
+                </div>
+              )}
             </div>
-
-            {/* Model info */}
-            {part.model && (
-              <div className="flex items-center gap-2 text-[10px] text-text-500">
-                <ModelIcon className="w-3 h-3" />
-                <span>{part.model.providerID}/{part.model.modelID}</span>
-              </div>
-            )}
-
-            {/* Command (if slash command) */}
-            {part.command && (
-              <div className="flex items-center gap-2 text-[10px] text-text-500">
-                <CommandIcon className="w-3 h-3" />
-                <span className="font-mono">{part.command}</span>
-              </div>
-            )}
-
-            {/* Child session info */}
-            {childSession && (
-              <div className="pt-2 border-t border-border-200/30">
-                <button
-                  onClick={handleEnter}
-                  className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-accent-main-100 hover:bg-accent-main-100/10 rounded-lg transition-colors"
-                >
-                  <EnterIcon className="w-3.5 h-3.5" />
-                  View full session
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

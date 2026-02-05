@@ -1,6 +1,7 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { ContentBlock } from '../../../../components'
 import { ChevronRightIcon, ExternalLinkIcon } from '../../../../components/Icons'
+import { useDelayedRender } from '../../../../hooks'
 import { useChildSessions, useSessionState, messageStore, childSessionStore } from '../../../../store'
 import { sendMessage, abortSession, getSessionMessages } from '../../../../api'
 import { sessionErrorHandler } from '../../../../utils'
@@ -22,6 +23,7 @@ export const TaskRenderer = memo(function TaskRenderer({ part }: ToolRendererPro
   const [expanded, setExpanded] = useState(() => 
     state.status === 'running' || state.status === 'pending'
   )
+  const shouldRenderBody = useDelayedRender(expanded)
   
   // 从 input 中提取任务信息
   const input = state.input as Record<string, unknown> | undefined
@@ -75,41 +77,43 @@ export const TaskRenderer = memo(function TaskRenderer({ part }: ToolRendererPro
           expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}>
           <div className="overflow-hidden">
-            <div className="pt-2 space-y-3">
-              {/* Prompt */}
-              {prompt && (
-                <div className="text-xs text-text-400 bg-bg-200/30 rounded-md px-3 py-2 whitespace-pre-wrap">
-                  {prompt.length > 300 ? prompt.slice(0, 300) + '...' : prompt}
-                </div>
-              )}
-              
-              {/* 子会话内容 */}
-              {targetSessionId && (
-                <SubSessionView 
-                  sessionId={targetSessionId} 
-                  isParentRunning={isRunning}
-                />
-              )}
-              
-              {/* 完成时的输出 */}
-              {isCompleted && state.output !== undefined && state.output !== null && (
-                <ContentBlock
-                  label="Result"
-                  content={typeof state.output === 'string' ? state.output : JSON.stringify(state.output, null, 2)}
-                  defaultCollapsed={true}
-                  maxHeight={150}
-                />
-              )}
-              
-              {/* 错误信息 */}
-              {isError && state.error !== undefined && (
-                <ContentBlock
-                  label="Error"
-                  content={typeof state.error === 'string' ? state.error : JSON.stringify(state.error)}
-                  variant="error"
-                />
-              )}
-            </div>
+            {shouldRenderBody && (
+              <div className="pt-2 space-y-3">
+                {/* Prompt */}
+                {prompt && (
+                  <div className="text-xs text-text-400 bg-bg-200/30 rounded-md px-3 py-2 whitespace-pre-wrap">
+                    {prompt.length > 300 ? prompt.slice(0, 300) + '...' : prompt}
+                  </div>
+                )}
+                
+                {/* 子会话内容 */}
+                {targetSessionId && (
+                  <SubSessionView 
+                    sessionId={targetSessionId} 
+                    isParentRunning={isRunning}
+                  />
+                )}
+                
+                {/* 完成时的输出 */}
+                {isCompleted && state.output !== undefined && state.output !== null && (
+                  <ContentBlock
+                    label="Result"
+                    content={typeof state.output === 'string' ? state.output : JSON.stringify(state.output, null, 2)}
+                    defaultCollapsed={true}
+                    maxHeight={150}
+                  />
+                )}
+                
+                {/* 错误信息 */}
+                {isError && state.error !== undefined && (
+                  <ContentBlock
+                    label="Error"
+                    content={typeof state.error === 'string' ? state.error : JSON.stringify(state.error)}
+                    variant="error"
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -224,6 +228,7 @@ const SubSessionView = memo(function SubSessionView({ sessionId, isParentRunning
 
   // 加载消息
   useEffect(() => {
+    if (!isParentRunning && !showInput) return
     if (loadedRef.current) return
     
     const state = messageStore.getSessionState(sessionId)
@@ -251,7 +256,7 @@ const SubSessionView = memo(function SubSessionView({ sessionId, isParentRunning
         sessionErrorHandler('load sub-session', err)
         messageStore.setLoadState(sessionId, 'error')
       })
-  }, [sessionId])
+  }, [sessionId, isParentRunning, showInput])
 
   // 自动滚动
   useEffect(() => {

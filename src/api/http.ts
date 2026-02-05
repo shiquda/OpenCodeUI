@@ -71,6 +71,10 @@ export interface RequestOptions {
 
 /**
  * 通用 HTTP 请求函数
+ * 
+ * 直接请求后端服务器，支持 CORS 跨域
+ * - 后端需要设置 Access-Control-Allow-Origin
+ * - 如果需要发送凭证（cookies），后端还需设置 Access-Control-Allow-Credentials
  */
 export async function request<T>(
   path: string,

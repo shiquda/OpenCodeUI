@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 interface UseSmoothStreamOptions {
   /** 每个字符的显示间隔（毫秒），默认 8ms ≈ 125 字符/秒 */
   charDelay?: number
+  /** 是否强制禁用动画，直接显示完整内容 */
+  disableAnimation?: boolean
 }
 
 interface UseSmoothStreamResult {
@@ -32,7 +34,7 @@ export function useSmoothStream(
   isStreaming: boolean,
   options: UseSmoothStreamOptions = {}
 ): UseSmoothStreamResult {
-  const { charDelay = 8 } = options
+  const { charDelay = 8, disableAnimation = false } = options
 
   // 当前显示的字符索引
   // 初始化时从当前 fullText 长度开始，这样：
@@ -77,6 +79,9 @@ export function useSmoothStream(
     } else if (isNewConversation && isStreaming) {
       // 新对话开始，从 0 开始动画
       setDisplayIndex(0)
+    } else if (!isStreaming) {
+      // 非 streaming 的历史内容，直接显示完整内容
+      setDisplayIndex(fullText.length)
     }
     
     prevTextRef.current = fullText
@@ -108,6 +113,13 @@ export function useSmoothStream(
     wasStreamingRef.current = isStreaming
   }, [isStreaming, fullText.length])
 
+  // 历史消息或 hydrate 后内容补齐时，直接显示全部
+  useEffect(() => {
+    if (!isStreaming) {
+      setDisplayIndex(fullText.length)
+    }
+  }, [fullText.length, isStreaming])
+
   // 使用 ref 存储最新值，避免 useEffect 依赖变化导致频繁重启动画
   const fullTextLengthRef = useRef(fullText.length)
   const charDelayRef = useRef(charDelay)
@@ -123,7 +135,7 @@ export function useSmoothStream(
   // 动画逻辑：只在 streaming 且还有内容未显示时运行
   useEffect(() => {
     // 不是 streaming，不需要动画
-    if (!isStreaming) {
+    if (!isStreaming || disableAnimation) {
       // 确保清理 RAF
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current)
@@ -211,7 +223,7 @@ export function useSmoothStream(
         waitTimeoutRef.current = null
       }
     }
-  }, [isStreaming]) // 只依赖 isStreaming，减少重启次数
+  }, [isStreaming, disableAnimation]) // 只依赖 isStreaming，减少重启次数
 
   // 强制立即显示全部
   const flush = useCallback(() => {
@@ -228,8 +240,8 @@ export function useSmoothStream(
 
   // 计算当前应该显示的文本
   // 非 streaming 时直接显示全部，streaming 时显示到 displayIndex
-  const displayText = isStreaming ? fullText.slice(0, displayIndex) : fullText
-  const isAnimating = isStreaming && displayIndex < fullText.length
+  const displayText = isStreaming && !disableAnimation ? fullText.slice(0, displayIndex) : fullText
+  const isAnimating = isStreaming && !disableAnimation && displayIndex < fullText.length
 
   return {
     displayText,

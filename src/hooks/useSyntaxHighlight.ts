@@ -64,9 +64,9 @@ class LRUCache<T> {
 }
 
 // 全局缓存实例 - HTML 和 Tokens 分开缓存
-// 增加缓存大小以支持长对话
-const htmlCache = new LRUCache<string>(500)
-const tokensCache = new LRUCache<any[][]>(200)
+// 控制缓存上限，避免长对话占用过多内存
+const htmlCache = new LRUCache<string>(120)
+const tokensCache = new LRUCache<any[][]>(80)
 
 // 代码长度限制 - 超过此长度跳过高亮
 const MAX_CODE_LENGTH = 50000 // 50KB

@@ -22,3 +22,5 @@ export type { ServerConfig, ServerHealth, ServerAuth } from './serverStore'
 
 export { keybindingStore, parseKeybinding, formatKeybinding, keyEventToString, matchesKeybinding } from './keybindingStore'
 export type { KeybindingAction, KeybindingConfig, ParsedKeybinding } from './keybindingStore'
+
+export { messageCacheStore } from './messageCacheStore'

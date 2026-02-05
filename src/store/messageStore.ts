@@ -16,7 +16,8 @@ import type {
   ApiSession,
   Attachment,
 } from '../api/types'
-import { MAX_HISTORY_MESSAGES } from '../constants'
+import { MAX_HISTORY_MESSAGES, MESSAGE_PART_PERSIST_THRESHOLD, MESSAGE_PREFETCH_BUFFER } from '../constants'
+import { messageCacheStore } from './messageCacheStore'
 
 // ============================================
 // Types
@@ -87,6 +88,18 @@ class MessageStore {
   private visibleMessagesCacheLength: number = 0
 
   // ============================================
+  // Parts Hydration Cache
+  // ============================================
+
+  private hydratedMessageIds = new Set<string>()
+  private persistedMessageKeys = new Set<string>()
+  private hydratedMessageKeys = new Set<string>()
+
+  private makeMessageKey(sessionId: string, messageId: string): string {
+    return `${sessionId}:${messageId}`
+  }
+
+  // ============================================
   // Message Trimming (Memory Guard)
   // ============================================
 
@@ -102,6 +115,18 @@ class MessageStore {
     state.prependedCount = Math.max(0, state.prependedCount - excess)
     state.hasMoreHistory = false
 
+    // 如果触发裁剪，清理对应的持久化索引（避免悬挂）
+    const prefix = `${sessionId}:`
+    const keepIds = new Set(state.messages.map(m => m.info.id))
+    for (const key of this.persistedMessageKeys) {
+      if (key.startsWith(prefix)) {
+        const id = key.slice(prefix.length)
+        if (!keepIds.has(id)) {
+          this.persistedMessageKeys.delete(key)
+        }
+      }
+    }
+
     if (state.revertState) {
       const remainingIds = new Set(state.messages.map(m => m.info.id))
       if (!remainingIds.has(state.revertState.messageId)) {
@@ -112,6 +137,184 @@ class MessageStore {
           state.revertState = null
         }
       }
+    }
+  }
+
+  // ============================================
+  // Parts Hydration & Persistence
+  // ============================================
+
+  getHydratedMessageIds(): Set<string> {
+    return this.hydratedMessageIds
+  }
+
+  private markMessageHydrated(sessionId: string, messageId: string) {
+    this.hydratedMessageIds.add(messageId)
+    this.hydratedMessageKeys.add(this.makeMessageKey(sessionId, messageId))
+  }
+
+  private markMessagePersisted(sessionId: string, messageId: string) {
+    this.persistedMessageKeys.add(this.makeMessageKey(sessionId, messageId))
+  }
+
+  private isMessagePersisted(sessionId: string, messageId: string): boolean {
+    return this.persistedMessageKeys.has(this.makeMessageKey(sessionId, messageId))
+  }
+
+  private purgePersistedKeysForSession(sessionId: string) {
+    const prefix = `${sessionId}:`
+    for (const key of this.persistedMessageKeys) {
+      if (key.startsWith(prefix)) {
+        this.persistedMessageKeys.delete(key)
+      }
+    }
+    for (const key of this.hydratedMessageKeys) {
+      if (key.startsWith(prefix)) {
+        this.hydratedMessageKeys.delete(key)
+      }
+    }
+  }
+
+  private computeMessageSize(message: Message): number {
+    let total = 0
+    for (const part of message.parts) {
+      if (part.type === 'text' || part.type === 'reasoning') {
+        total += part.text.length
+      } else if (part.type === 'tool') {
+        const state = part.state
+        if (state.input) total += JSON.stringify(state.input).length
+        if (state.output) total += state.output.length
+        if (state.error) total += String(state.error).length
+        if (state.metadata) total += JSON.stringify(state.metadata).length
+      } else if (part.type === 'file') {
+        if (part.source?.text?.value) total += part.source.text.value.length
+      } else if (part.type === 'agent') {
+        if (part.source?.value) total += part.source.value.length
+      } else if (part.type === 'subtask') {
+        total += part.prompt.length + part.description.length
+      } else if (part.type === 'snapshot') {
+        total += part.snapshot.length
+      } else if (part.type === 'patch') {
+        total += part.files.join('').length
+      }
+    }
+    return total
+  }
+
+  private getTailKeepIds(state: SessionState): string[] {
+    const totalMessages = state.messages.length
+    if (totalMessages === 0) return []
+    const tailSize = Math.max(60, MESSAGE_PREFETCH_BUFFER * 2)
+    const keepFrom = Math.max(0, totalMessages - tailSize)
+    return state.messages.slice(keepFrom).map(m => m.info.id)
+  }
+
+  private scheduleEvictAfterPersist(sessionId: string, state: SessionState) {
+    void this.persistSessionParts(sessionId, state, true).then(() => {
+      const latestState = this.sessions.get(sessionId)
+      if (!latestState) return
+      const keepIds = this.getTailKeepIds(latestState)
+      if (keepIds.length > 0) {
+        this.evictMessageParts(sessionId, keepIds)
+      }
+    })
+  }
+
+  private async persistMessagePartsIfNeeded(sessionId: string, message: Message, force: boolean = false) {
+    if (!message.parts.length) return
+    if (message.isStreaming) return
+    const size = this.computeMessageSize(message)
+    if (!force && size < MESSAGE_PART_PERSIST_THRESHOLD) return
+    await messageCacheStore.setMessageParts(sessionId, message.info.id, message.parts)
+    this.markMessagePersisted(sessionId, message.info.id)
+  }
+
+  private async persistSessionParts(sessionId: string, state: SessionState, force: boolean = false) {
+    for (const message of state.messages) {
+      await this.persistMessagePartsIfNeeded(sessionId, message, force)
+    }
+  }
+
+  async hydrateMessageParts(sessionId: string, messageId: string): Promise<boolean> {
+    if (this.hydratedMessageKeys.has(this.makeMessageKey(sessionId, messageId))) return true
+    const state = this.sessions.get(sessionId)
+    if (!state) return false
+
+    const msgIndex = state.messages.findIndex(m => m.info.id === messageId)
+    if (msgIndex === -1) return false
+
+    const message = state.messages[msgIndex]
+    if (message.parts.length > 0) {
+      this.markMessageHydrated(sessionId, messageId)
+      return true
+    }
+
+    if (!this.isMessagePersisted(sessionId, messageId)) return false
+    const cached = await messageCacheStore.getMessageParts(sessionId, messageId)
+    if (!cached) return false
+
+    const newMessage: Message = { ...message, parts: cached.parts as Part[] }
+    state.messages = [
+      ...state.messages.slice(0, msgIndex),
+      newMessage,
+      ...state.messages.slice(msgIndex + 1),
+    ]
+
+    this.markMessageHydrated(sessionId, messageId)
+    this.notify()
+    return true
+  }
+
+  async prefetchMessageParts(sessionId: string, messageIds: string[]) {
+    if (!messageIds.length) return
+    const trimmed = messageIds.slice(0, MESSAGE_PREFETCH_BUFFER)
+    for (const id of trimmed) {
+      if (this.hydratedMessageKeys.has(this.makeMessageKey(sessionId, id))) continue
+      const state = this.sessions.get(sessionId)
+      if (!state) break
+      const msg = state.messages.find(m => m.info.id === id)
+      if (!msg) continue
+      if (msg.parts.length > 0) {
+        this.markMessageHydrated(sessionId, id)
+        continue
+      }
+      if (!this.isMessagePersisted(sessionId, id)) continue
+      const cached = await messageCacheStore.getMessageParts(sessionId, id)
+      if (!cached) continue
+      const msgIndex = state.messages.findIndex(m => m.info.id === id)
+      if (msgIndex === -1) continue
+      const newMessage: Message = { ...state.messages[msgIndex], parts: cached.parts as Part[] }
+      state.messages = [
+        ...state.messages.slice(0, msgIndex),
+        newMessage,
+        ...state.messages.slice(msgIndex + 1),
+      ]
+      this.markMessageHydrated(sessionId, id)
+    }
+    this.notify()
+  }
+
+  // 释放非关键消息的 parts（保持可用但不常驻内存）
+  evictMessageParts(sessionId: string, keepMessageIds: string[]) {
+    const state = this.sessions.get(sessionId)
+    if (!state) return
+    const keep = new Set(keepMessageIds)
+    let updated = false
+
+    state.messages = state.messages.map(msg => {
+      if (keep.has(msg.info.id)) return msg
+      if (msg.parts.length === 0) return msg
+      if (msg.isStreaming) return msg
+      if (msg.info.role === 'user') return msg
+      if (!this.isMessagePersisted(sessionId, msg.info.id)) return msg
+
+      updated = true
+      this.hydratedMessageKeys.delete(this.makeMessageKey(sessionId, msg.info.id))
+      return { ...msg, parts: [] }
+    })
+
+    if (updated) {
+      this.notify()
     }
   }
 
@@ -269,6 +472,8 @@ class MessageStore {
     if (this.currentSessionId === sessionId) return
     
     this.currentSessionId = sessionId
+    this.hydratedMessageIds.clear()
+    this.hydratedMessageKeys.clear()
     // 使用立即通知，确保 session 切换立即生效
     this.notifyImmediate()
   }
@@ -327,6 +532,8 @@ class MessageStore {
       console.log('[MessageStore] Evicting old session:', oldestId)
       this.sessions.delete(oldestId)
       this.sessionAccessTime.delete(oldestId)
+      this.purgePersistedKeysForSession(oldestId)
+      void messageCacheStore.clearSession(oldestId)
     }
   }
 
@@ -411,6 +618,14 @@ class MessageStore {
       state.isStreaming = false
     }
 
+    this.scheduleEvictAfterPersist(sessionId, state)
+
+    for (const message of state.messages) {
+      if (message.parts.length > 0) {
+        this.markMessageHydrated(sessionId, message.info.id)
+      }
+    }
+
     this.trimMessagesIfNeeded(sessionId, state)
 
     this.notify()
@@ -430,6 +645,16 @@ class MessageStore {
 
     this.trimMessagesIfNeeded(sessionId, state)
 
+    const persistBatch = newMessages.map(message => this.persistMessagePartsIfNeeded(sessionId, message, true))
+    void Promise.all(persistBatch).then(() => {
+      const latestState = this.sessions.get(sessionId)
+      if (!latestState) return
+      const keepIds = this.getTailKeepIds(latestState)
+      if (keepIds.length > 0) {
+        this.evictMessageParts(sessionId, keepIds)
+      }
+    })
+
     this.notify()
   }
 
@@ -439,6 +664,9 @@ class MessageStore {
   clearSession(sessionId: string) {
     this.sessions.delete(sessionId)
     this.sessionAccessTime.delete(sessionId)
+    this.hydratedMessageIds.clear()
+    this.purgePersistedKeysForSession(sessionId)
+    void messageCacheStore.clearSession(sessionId)
     this.notify()
   }
 
@@ -491,6 +719,17 @@ class MessageStore {
       this.trimMessagesIfNeeded(apiMsg.sessionID, state)
     }
 
+    // 尝试持久化 parts（适用于大消息）
+    const targetIndex = existingIndex >= 0 ? existingIndex : state.messages.length - 1
+    const targetMessage = state.messages[targetIndex]
+    if (targetMessage) {
+      void this.persistMessagePartsIfNeeded(apiMsg.sessionID, targetMessage)
+    }
+
+    if (targetMessage && targetMessage.parts.length > 0) {
+      this.markMessageHydrated(apiMsg.sessionID, targetMessage.info.id)
+    }
+
     this.notify()
   }
 
@@ -529,6 +768,10 @@ class MessageStore {
       newMessage,
       ...state.messages.slice(msgIndex + 1)
     ]
+
+    // 大块内容时持久化
+    void this.persistMessagePartsIfNeeded(apiPart.sessionID, newMessage)
+    this.markMessageHydrated(apiPart.sessionID, newMessage.info.id)
     
     this.notify()
   }
@@ -578,6 +821,8 @@ class MessageStore {
 
     this.trimMessagesIfNeeded(sessionId, state)
 
+    this.scheduleEvictAfterPersist(sessionId, state)
+
     this.notify()
   }
 
@@ -599,6 +844,8 @@ class MessageStore {
     }
 
     this.trimMessagesIfNeeded(sessionId, state)
+
+    this.scheduleEvictAfterPersist(sessionId, state)
 
     this.notify()
   }
@@ -706,6 +953,7 @@ class MessageStore {
     state.isStreaming = isStreaming
     if (!isStreaming) {
       this.trimMessagesIfNeeded(sessionId, state)
+      this.scheduleEvictAfterPersist(sessionId, state)
     }
     this.notify()
   }

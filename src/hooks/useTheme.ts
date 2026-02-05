@@ -4,7 +4,7 @@ import { STORAGE_KEY_THEME_MODE, THEME_SWITCH_DISABLE_MS } from '../constants'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 
-export function useTheme(options?: { disableAnimation?: boolean; isHeavy?: boolean }) {
+export function useTheme() {
   const [mode, setMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_THEME_MODE)
     return (saved as ThemeMode) || 'system'
@@ -23,10 +23,7 @@ export function useTheme(options?: { disableAnimation?: boolean; isHeavy?: boole
   // 应用主题到 DOM
   useEffect(() => {
     const root = document.documentElement
-    const shouldSkip = skipNextTransitionRef.current || options?.disableAnimation || options?.isHeavy
-
-    if (shouldSkip) {
-      root.setAttribute('data-theme-transition', 'off')
+    if (skipNextTransitionRef.current) {
       skipNextTransitionRef.current = false
     }
     
@@ -36,14 +33,9 @@ export function useTheme(options?: { disableAnimation?: boolean; isHeavy?: boole
       root.setAttribute('data-mode', mode)
     }
 
-    if (shouldSkip) {
-      setTimeout(() => {
-        root.removeAttribute('data-theme-transition')
-      }, THEME_SWITCH_DISABLE_MS)
-    }
 
     localStorage.setItem(STORAGE_KEY_THEME_MODE, mode)
-  }, [mode, options?.disableAnimation, options?.isHeavy])
+  }, [mode])
 
   // 监听系统主题变化
   useEffect(() => {
@@ -76,20 +68,13 @@ export function useTheme(options?: { disableAnimation?: boolean; isHeavy?: boole
     })
   }, [])
 
-  const setThemeWithAnimation = useCallback((newMode: ThemeMode, event?: React.MouseEvent, meta?: { isHeavy?: boolean }) => {
-    const prefersReducedMotion = typeof window !== 'undefined'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const shouldDisableAnimation = prefersReducedMotion || options?.disableAnimation || options?.isHeavy || meta?.isHeavy
+  const setThemeWithAnimation = useCallback((newMode: ThemeMode, event?: React.MouseEvent) => {
+    const shouldDisableAnimation = false
 
     // @ts-ignore - View Transitions API types might not be available
     if (shouldDisableAnimation || !document.startViewTransition || !event) {
       skipNextTransitionRef.current = true
-      const root = document.documentElement
-      root.setAttribute('data-theme-transition', 'off')
       setMode(newMode)
-      setTimeout(() => {
-        root.removeAttribute('data-theme-transition')
-      }, THEME_SWITCH_DISABLE_MS)
       return
     }
 
@@ -111,26 +96,26 @@ export function useTheme(options?: { disableAnimation?: boolean; isHeavy?: boole
       })
     })
 
-    transition.ready.then(() => {
-      document.documentElement.animate(
-        {
-          clipPath: [
-            `circle(0px at ${x}px ${y}px)`,
-            `circle(${endRadius}px at ${x}px ${y}px)`,
-          ],
-        },
-        {
-          duration: 350,
-          easing: 'ease-in-out',
-          pseudoElement: '::view-transition-new(root)',
-        }
-      )
-    }).finally(() => {
+     transition.ready.then(() => {
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${endRadius}px at ${x}px ${y}px)`,
+            ],
+          },
+          {
+            duration: 520,
+            easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)',
+            pseudoElement: '::view-transition-new(root)',
+          }
+        )
+      }).finally(() => {
       setTimeout(() => {
         root.removeAttribute('data-theme-transition')
       }, THEME_SWITCH_DISABLE_MS)
     })
-  }, [options?.disableAnimation, options?.isHeavy])
+  }, [])
 
   return {
     mode,
