@@ -4,8 +4,8 @@
 // ============================================
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { listDirectory, getFileContent, getFileStatus } from '../api'
-import type { FileNode, FileContent, FileStatusItem } from '../api/types'
+import { listDirectory, getFileContent, getFileStatus, getSessionDiff } from '../api'
+import type { FileNode, FileContent, FileStatusItem, FileDiff } from '../api/types'
 
 export interface FileTreeNode extends FileNode {
   children?: FileTreeNode[]
@@ -16,6 +16,7 @@ export interface FileTreeNode extends FileNode {
 export interface UseFileExplorerOptions {
   directory?: string
   autoLoad?: boolean
+  sessionId?: string
 }
 
 export interface UseFileExplorerResult {
@@ -50,7 +51,7 @@ export interface UseFileExplorerResult {
 }
 
 export function useFileExplorer(options: UseFileExplorerOptions = {}): UseFileExplorerResult {
-  const { directory, autoLoad = true } = options
+  const { directory, autoLoad = true, sessionId } = options
   
   // 文件树状态
   const [tree, setTree] = useState<FileTreeNode[]>([])
@@ -92,16 +93,43 @@ export function useFileExplorer(options: UseFileExplorerOptions = {}): UseFileEx
       const sorted = sortNodes(nodes)
       setTree(sorted.map(n => ({ ...n, children: n.type === 'directory' ? undefined : undefined })))
       
-      // 同时加载文件状态
+      // 同时加载文件状态（git status + session diffs）
+      const statusMap = new Map<string, FileStatusItem>()
+      
+      // 1. 先加载 git status
       try {
         const status = await getFileStatus(directory)
         if (loadId === loadIdRef.current) {
-          const statusMap = new Map<string, FileStatusItem>()
           status.forEach(s => statusMap.set(s.path, s))
-          setFileStatus(statusMap)
         }
       } catch {
         // 忽略文件状态加载失败
+      }
+      
+      // 2. 再加载 session diffs（优先级更高，会覆盖 git status）
+      if (sessionId) {
+        try {
+          const diffs = await getSessionDiff(sessionId)
+          if (loadId === loadIdRef.current) {
+            diffs.forEach(diff => {
+              const status = getFileStatusFromDiff(diff)
+              statusMap.set(diff.file, {
+                path: diff.file,
+                added: diff.additions,
+                removed: diff.deletions,
+                status,
+              })
+            })
+            // 计算目录的累积状态
+            computeDirectoryStatus(statusMap)
+          }
+        } catch {
+          // 忽略 session diff 加载失败
+        }
+      }
+      
+      if (loadId === loadIdRef.current) {
+        setFileStatus(statusMap)
       }
     } catch (e) {
       if (loadId === loadIdRef.current) {
@@ -112,7 +140,7 @@ export function useFileExplorer(options: UseFileExplorerOptions = {}): UseFileEx
         setIsLoading(false)
       }
     }
-  }, [directory])
+  }, [directory, sessionId])
 
   // 加载子目录
   const loadChildren = useCallback(async (parentPath: string) => {
@@ -289,4 +317,41 @@ function updateTreeNode(
     }
     return node
   })
+}
+
+// Helper: 从 diff 推断文件状态
+function getFileStatusFromDiff(diff: FileDiff): 'added' | 'modified' | 'deleted' {
+  if (!diff.before || diff.before.trim() === '') return 'added'
+  if (!diff.after || diff.after.trim() === '') return 'deleted'
+  return 'modified'
+}
+
+// Helper: 计算目录的累积状态（基于子文件状态）
+function computeDirectoryStatus(statusMap: Map<string, FileStatusItem>): void {
+  // 收集所有需要设置状态的目录路径
+  const dirStatuses = new Map<string, 'added' | 'modified' | 'deleted'>()
+  
+  for (const [filePath, item] of statusMap) {
+    const parts = filePath.split(/[/\\]/)
+    // 构建所有父目录路径
+    for (let i = 1; i < parts.length; i++) {
+      const dirPath = parts.slice(0, i).join('/')
+      const existingStatus = dirStatuses.get(dirPath)
+      const newStatus = item.status as 'added' | 'modified' | 'deleted'
+      
+      // 优先级: added > modified > deleted
+      if (!existingStatus || 
+          (newStatus === 'added') ||
+          (newStatus === 'modified' && existingStatus === 'deleted')) {
+        dirStatuses.set(dirPath, newStatus)
+      }
+    }
+  }
+  
+  // 将目录状态添加到 statusMap
+  for (const [dirPath, status] of dirStatuses) {
+    if (!statusMap.has(dirPath)) {
+      statusMap.set(dirPath, { path: dirPath, added: 0, removed: 0, status })
+    }
+  }
 }

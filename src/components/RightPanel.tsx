@@ -75,6 +75,7 @@ export const RightPanel = memo(function RightPanel() {
             previewFile={previewFile}
             position="right"
             isPanelResizing={isPanelResizing}
+            sessionId={sessionId}
           />
         )
       case 'changes':

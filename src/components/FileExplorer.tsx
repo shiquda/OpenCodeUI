@@ -33,6 +33,7 @@ interface FileExplorerProps {
   previewFile: PreviewFile | null
   position?: 'bottom' | 'right'
   isPanelResizing?: boolean
+  sessionId?: string | null
 }
 
 export const FileExplorer = memo(function FileExplorer({ 
@@ -40,6 +41,7 @@ export const FileExplorer = memo(function FileExplorer({
   previewFile,
   position = 'right',
   isPanelResizing = false,
+  sessionId,
 }: FileExplorerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<HTMLDivElement>(null)
@@ -66,7 +68,7 @@ export const FileExplorer = memo(function FileExplorer({
     clearPreview,
     fileStatus,
     refresh,
-  } = useFileExplorer({ directory, autoLoad: true })
+  } = useFileExplorer({ directory, autoLoad: true, sessionId: sessionId || undefined })
 
   // 同步高度到 CSS 变量
   useLayoutEffect(() => {

@@ -4,8 +4,8 @@
 // 支持拖拽调整高度，CSS 变量 + requestAnimationFrame 优化
 // ============================================
 
-import { memo, useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
-import { FileIcon, CloseIcon, RetryIcon } from './Icons'
+import { memo, useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react'
+import { FileIcon, CloseIcon, RetryIcon, FolderIcon, FolderOpenIcon, ChevronRightIcon } from './Icons'
 import { DiffViewer, type ViewMode } from './DiffViewer'
 import { getSessionDiff } from '../api/session'
 import type { FileDiff } from '../api/types'
@@ -31,9 +31,13 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   const [diffs, setDiffs] = useState<FileDiff[]>([])
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('unified')
+  const [listMode, setListMode] = useState<'flat' | 'tree'>('tree')
 
   // 选中的文件（显示在预览区）
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+
+  // 展开的目录
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
 
   // 内部拖拽 resize
   const [listHeight, setListHeight] = useState<number | null>(null)
@@ -100,6 +104,39 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   const handleSelectFile = useCallback((file: string) => {
     setSelectedFile(prev => prev === file ? prev : file)
   }, [])
+
+  // 切换目录展开/折叠
+  const handleToggleDir = useCallback((path: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+  }, [])
+
+  // 构建树形结构
+  const changesTree = useMemo(() => buildChangesTree(diffs), [diffs])
+
+  // 默认展开所有目录（首次加载时）
+  useEffect(() => {
+    if (diffs.length > 0 && expandedDirs.size === 0) {
+      const allDirPaths = new Set<string>()
+      const collectDirs = (nodes: ChangesTreeNode[]) => {
+        for (const node of nodes) {
+          if (node.type === 'directory') {
+            allDirPaths.add(node.path)
+            collectDirs(node.children)
+          }
+        }
+      }
+      collectDirs(changesTree)
+      setExpandedDirs(allDirPaths)
+    }
+  }, [diffs, changesTree, expandedDirs.size])
 
   // 关闭预览
   const handleClosePreview = useCallback(() => {
@@ -200,6 +237,32 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
           </div>
 
           <div className="flex items-center gap-1">
+            {/* List Mode Toggle */}
+            <div className="flex items-center bg-bg-200/50 rounded overflow-hidden border border-border-200/50 mr-1">
+              <button
+                onClick={() => setListMode('flat')}
+                className={`px-2 py-0.5 text-[10px] transition-colors ${
+                  listMode === 'flat'
+                    ? 'bg-bg-000 text-text-100 shadow-sm'
+                    : 'text-text-400 hover:text-text-200'
+                }`}
+                title="Flat list"
+              >
+                List
+              </button>
+              <button
+                onClick={() => setListMode('tree')}
+                className={`px-2 py-0.5 text-[10px] transition-colors ${
+                  listMode === 'tree'
+                    ? 'bg-bg-000 text-text-100 shadow-sm'
+                    : 'text-text-400 hover:text-text-200'
+                }`}
+                title="Tree view"
+              >
+                Tree
+              </button>
+            </div>
+
             {/* View Mode Toggle */}
             <div className="flex items-center bg-bg-200/50 rounded overflow-hidden border border-border-200/50">
               <button
@@ -239,29 +302,45 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
         {/* File List */}
         <div className="flex-1 overflow-auto panel-scrollbar-y">
           <div className="py-0.5">
-            {diffs.map((diff) => {
-              const isSelected = selectedFile === diff.file
-              const fileStatus = getFileStatus(diff)
+            {listMode === 'tree' ? (
+              // Tree view
+              changesTree.map(node => (
+                <ChangesTreeItem
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  selectedFile={selectedFile}
+                  expandedDirs={expandedDirs}
+                  onSelectFile={handleSelectFile}
+                  onToggleDir={handleToggleDir}
+                />
+              ))
+            ) : (
+              // Flat list view
+              diffs.map((diff) => {
+                const isSelected = selectedFile === diff.file
+                const fileStatus = getFileStatus(diff)
 
-              return (
-                <button
-                  key={diff.file}
-                  onClick={() => handleSelectFile(diff.file)}
-                  className={`
-                    w-full flex items-center gap-2 px-3 py-1 text-left
-                    hover:bg-bg-200/50 transition-colors text-[12px]
-                    ${isSelected ? 'bg-bg-200/70 text-text-100' : 'text-text-300'}
-                  `}
-                >
-                  <FileStatusIcon status={fileStatus} />
-                  <span className="flex-1 font-mono truncate">{diff.file}</span>
-                  <div className="flex items-center gap-2 text-[10px] font-mono shrink-0">
-                    {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
-                    {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
-                  </div>
-                </button>
-              )
-            })}
+                return (
+                  <button
+                    key={diff.file}
+                    onClick={() => handleSelectFile(diff.file)}
+                    className={`
+                      w-full flex items-center gap-2 px-3 py-1 text-left
+                      hover:bg-bg-200/50 transition-colors text-[12px]
+                      ${isSelected ? 'bg-bg-200/70 text-text-100' : 'text-text-300'}
+                    `}
+                  >
+                    <FileStatusIcon status={fileStatus} />
+                    <span className="flex-1 font-mono truncate">{diff.file}</span>
+                    <div className="flex items-center gap-2 text-[10px] font-mono shrink-0">
+                      {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
+                      {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
+                    </div>
+                  </button>
+                )
+              })
+            )}
           </div>
         </div>
       </div>
@@ -370,3 +449,181 @@ function FileStatusIcon({ status }: { status: FileStatus }) {
 
   return <FileIcon size={14} className={`${colorClass} shrink-0`} />
 }
+
+// ============================================
+// Changes Tree Data Structure
+// ============================================
+
+interface ChangesTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  diff?: FileDiff
+  children: ChangesTreeNode[]
+  additions: number
+  deletions: number
+  status?: FileStatus
+}
+
+/**
+ * 将扁平的 FileDiff[] 转换为树形结构
+ */
+function buildChangesTree(diffs: FileDiff[]): ChangesTreeNode[] {
+  const root: ChangesTreeNode[] = []
+
+  for (const diff of diffs) {
+    const parts = diff.file.split(/[/\\]/).filter(Boolean)
+    let currentLevel = root
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      const isFile = i === parts.length - 1
+      const currentPath = parts.slice(0, i + 1).join('/')
+
+      let existing = currentLevel.find(n => n.name === part)
+
+      if (!existing) {
+        const status = isFile ? getFileStatus(diff) : undefined
+        existing = {
+          name: part,
+          path: currentPath,
+          type: isFile ? 'file' : 'directory',
+          diff: isFile ? diff : undefined,
+          children: [],
+          additions: isFile ? diff.additions : 0,
+          deletions: isFile ? diff.deletions : 0,
+          status,
+        }
+        currentLevel.push(existing)
+      }
+
+      if (!isFile) {
+        // 累加目录的统计
+        existing.additions += diff.additions
+        existing.deletions += diff.deletions
+        currentLevel = existing.children
+      }
+    }
+  }
+
+  // 递归排序 + 计算目录状态：目录在前，文件在后，同类按名称排序
+  const processNodes = (nodes: ChangesTreeNode[]): ChangesTreeNode[] => {
+    return nodes
+      .map(n => {
+        const processedChildren = processNodes(n.children)
+        // 计算目录的累积状态
+        let dirStatus: FileStatus | undefined = undefined
+        if (n.type === 'directory' && processedChildren.length > 0) {
+          // 优先级: added > modified > deleted
+          const hasAdded = processedChildren.some(c => c.status === 'added')
+          const hasModified = processedChildren.some(c => c.status === 'modified')
+          const hasDeleted = processedChildren.some(c => c.status === 'deleted')
+          if (hasAdded) dirStatus = 'added'
+          else if (hasModified) dirStatus = 'modified'
+          else if (hasDeleted) dirStatus = 'deleted'
+        }
+        return { 
+          ...n, 
+          children: processedChildren,
+          status: n.type === 'directory' ? dirStatus : n.status,
+        }
+      })
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+  }
+
+  return processNodes(root)
+}
+
+// ============================================
+// ChangesTreeItem Component
+// ============================================
+
+interface ChangesTreeItemProps {
+  node: ChangesTreeNode
+  depth: number
+  selectedFile: string | null
+  expandedDirs: Set<string>
+  onSelectFile: (path: string) => void
+  onToggleDir: (path: string) => void
+}
+
+const ChangesTreeItem = memo(function ChangesTreeItem({
+  node,
+  depth,
+  selectedFile,
+  expandedDirs,
+  onSelectFile,
+  onToggleDir,
+}: ChangesTreeItemProps) {
+  const isExpanded = expandedDirs.has(node.path)
+  const isSelected = node.type === 'file' && selectedFile === node.diff?.file
+  const paddingLeft = 8 + depth * 16
+
+  // 状态颜色
+  const statusColor = node.status ? {
+    added: 'text-success-100',
+    deleted: 'text-danger-100',
+    modified: 'text-warning-100',
+  }[node.status] : 'text-text-400'
+
+  if (node.type === 'directory') {
+    return (
+      <>
+        <button
+          onClick={() => onToggleDir(node.path)}
+          className="w-full flex items-center gap-1.5 py-1 hover:bg-bg-200/50 transition-colors text-[12px] text-text-300"
+          style={{ paddingLeft }}
+        >
+          <ChevronRightIcon
+            size={12}
+            className={`shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+          />
+          {isExpanded ? (
+            <FolderOpenIcon size={14} className={`${statusColor} shrink-0`} />
+          ) : (
+            <FolderIcon size={14} className={`${statusColor} shrink-0`} />
+          )}
+          <span className={`flex-1 truncate text-left ${node.status ? statusColor : ''}`}>{node.name}</span>
+          <div className="flex items-center gap-1.5 text-[10px] font-mono pr-3 shrink-0">
+            {node.additions > 0 && <span className="text-success-100">+{node.additions}</span>}
+            {node.deletions > 0 && <span className="text-danger-100">-{node.deletions}</span>}
+          </div>
+        </button>
+        {isExpanded && node.children.map(child => (
+          <ChangesTreeItem
+            key={child.path}
+            node={child}
+            depth={depth + 1}
+            selectedFile={selectedFile}
+            expandedDirs={expandedDirs}
+            onSelectFile={onSelectFile}
+            onToggleDir={onToggleDir}
+          />
+        ))}
+      </>
+    )
+  }
+
+  // File node
+  return (
+    <button
+      onClick={() => node.diff && onSelectFile(node.diff.file)}
+      className={`
+        w-full flex items-center gap-1.5 py-1 transition-colors text-[12px]
+        hover:bg-bg-200/50
+        ${isSelected ? 'bg-bg-200/70 text-text-100' : 'text-text-300'}
+      `}
+      style={{ paddingLeft: paddingLeft + 16 }}
+    >
+      <FileStatusIcon status={node.status!} />
+      <span className="flex-1 font-mono truncate text-left">{node.name}</span>
+      <div className="flex items-center gap-1.5 text-[10px] font-mono pr-3 shrink-0">
+        {node.additions > 0 && <span className="text-success-100">+{node.additions}</span>}
+        {node.deletions > 0 && <span className="text-danger-100">-{node.deletions}</span>}
+      </div>
+    </button>
+  )
+})
