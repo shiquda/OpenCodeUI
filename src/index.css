@@ -909,3 +909,22 @@ textarea.custom-scrollbar::-webkit-scrollbar-thumb {
   mask-image: linear-gradient(to right, transparent, black 10px, black 90%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 10px, black 90%, transparent);
 }
+
+/* ============================================
+ * CSS Containment - 优化布局性能，减少 CLS
+ * ============================================ */
+
+/* 隔离布局变化，防止子元素影响外部布局 */
+.contain-layout {
+  contain: layout;
+}
+
+/* 完全隔离（用于独立的滚动区域） */
+.contain-strict {
+  contain: strict;
+}
+
+/* 内容隔离（用于动态内容区域） */
+.contain-content {
+  contain: content;
+}

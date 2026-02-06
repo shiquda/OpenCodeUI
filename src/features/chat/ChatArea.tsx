@@ -14,6 +14,7 @@ import {
   SCROLL_RESUME_DELAY_MS,
   AT_BOTTOM_THRESHOLD_PX,
   VIRTUOSO_OVERSCAN_PX,
+  VIRTUOSO_ESTIMATED_ITEM_HEIGHT,
   MESSAGE_PREFETCH_BUFFER,
 } from '../../constants'
 
@@ -257,11 +258,11 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
   }, [registerMessage, onUndo, canUndo, isWideMode, sessionId])
 
   return (
-    <div className="h-full overflow-hidden">
+    <div className="h-full overflow-hidden contain-strict">
       <div 
         key={transitionKey}
         ref={setScrollParent} 
-        className="h-full overflow-y-auto custom-scrollbar animate-fade-in"
+        className="h-full overflow-y-auto custom-scrollbar animate-fade-in contain-content"
       >
         {scrollParent && (
           <Virtuoso
@@ -275,6 +276,8 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
             atBottomStateChange={handleAtBottomStateChange}
             isScrolling={handleIsScrolling}
             atBottomThreshold={AT_BOTTOM_THRESHOLD_PX}
+            // 预估消息高度，减少初始渲染时的布局跳动 (CLS)
+            defaultItemHeight={VIRTUOSO_ESTIMATED_ITEM_HEIGHT}
             // 减少 prepend 时的闪烁，跳过 ResizeObserver 的 requestAnimationFrame
             // 可能产生 console 警告但能改善体验
             skipAnimationFrameInResizeObserver

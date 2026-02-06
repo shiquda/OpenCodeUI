@@ -167,10 +167,18 @@ const AssistantMessageView = memo(function AssistantMessageView({ message, onEns
   const messageError = (info as AssistantMessageInfo).error
 
   if (!isStreaming && parts.length === 0) {
+    // 使用骨架屏占位，预留合理高度减少 CLS
     return (
-      <div className="flex items-center gap-2 text-xs text-text-500 py-2">
-        <span className="w-2 h-2 rounded-full bg-text-500 animate-pulse" />
-        Loading message...
+      <div className="flex flex-col gap-2 w-full min-h-[80px]">
+        <div className="flex items-center gap-2 text-xs text-text-500">
+          <span className="w-2 h-2 rounded-full bg-text-500/50 animate-pulse" />
+          <span className="text-text-400">Loading...</span>
+        </div>
+        {/* 骨架屏模拟文本行 */}
+        <div className="space-y-2">
+          <div className="h-4 bg-bg-200/50 rounded w-3/4 animate-pulse" />
+          <div className="h-4 bg-bg-200/50 rounded w-1/2 animate-pulse" />
+        </div>
       </div>
     )
   }

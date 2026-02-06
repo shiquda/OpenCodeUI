@@ -24,6 +24,9 @@ export const AT_BOTTOM_THRESHOLD_PX = 60
 /** Virtuoso 预加载区域 */
 export const VIRTUOSO_OVERSCAN_PX = 280
 
+/** Virtuoso 预估消息高度（减少 CLS） */
+export const VIRTUOSO_ESTIMATED_ITEM_HEIGHT = 120
+
 /** 加载更多触发阈值 */
 export const LOAD_MORE_THRESHOLD_PX = 100
 
