@@ -1,11 +1,12 @@
 // ============================================
-// WorktreePanel - Git Worktree 管理面板
-// 显示所有 worktree，支持创建/删除/重置
+// WorktreePanel - Git 面板
+// 显示 VCS 分支信息 + Worktree 管理
 // ============================================
 
 import { memo, useState, useEffect, useCallback } from 'react'
 import {
   GitWorktreeIcon,
+  GitBranchIcon,
   PlusIcon,
   CloseIcon,
   TrashIcon,
@@ -13,6 +14,7 @@ import {
   SpinnerIcon,
   FolderIcon,
   AlertCircleIcon,
+  ExternalLinkIcon,
 } from './Icons'
 import {
   listWorktrees,
@@ -20,7 +22,9 @@ import {
   removeWorktree,
   resetWorktree,
 } from '../api/worktree'
-import { useDirectory } from '../hooks'
+import { subscribeToEvents } from '../api/events'
+import { useDirectory, useVcsInfo } from '../hooks'
+import { normalizeToForwardSlash } from '../utils'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 
 // ============================================
@@ -32,7 +36,8 @@ interface WorktreePanelProps {
 }
 
 export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizing }: WorktreePanelProps) {
-  const { currentDirectory } = useDirectory()
+  const { currentDirectory, addDirectory } = useDirectory()
+  const { vcsInfo, refresh: refreshVcs } = useVcsInfo(currentDirectory)
   const [worktrees, setWorktrees] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -70,21 +75,49 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
     loadWorktrees()
   }, [loadWorktrees])
 
+  // 订阅 SSE 事件：worktree ready/failed + vcs branch 变更
+  useEffect(() => {
+    return subscribeToEvents({
+      onWorktreeReady: () => {
+        loadWorktrees()
+      },
+      onWorktreeFailed: (data) => {
+        setError(`Worktree failed: ${data.message}`)
+        setActionLoading(null)
+      },
+      onVcsBranchUpdated: () => {
+        refreshVcs()
+      },
+    })
+  }, [loadWorktrees, refreshVcs])
+
+  // 在 worktree 目录下开启新 session
+  const handleOpenSession = useCallback((worktreeDir: string) => {
+    const normalized = normalizeToForwardSlash(worktreeDir)
+    // 把 worktree 目录加入项目列表（同时切换过去）
+    addDirectory(normalized)
+    // 直接设置 URL hash 到新 session 状态（清掉 sessionId，用 worktree 目录）
+    window.location.hash = `#/?dir=${normalized}`
+  }, [addDirectory])
+
   // 创建 worktree
-  const handleCreate = useCallback(async (name: string) => {
+  const handleCreate = useCallback(async (name: string, autoOpen: boolean) => {
     if (!currentDirectory || !name.trim()) return
 
     setActionLoading('create')
     try {
-      await createWorktree({ name: name.trim() }, currentDirectory)
+      const wt = await createWorktree({ name: name.trim() }, currentDirectory)
       setShowCreateForm(false)
       await loadWorktrees()
+      if (autoOpen && wt.directory) {
+        handleOpenSession(wt.directory)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create worktree')
     } finally {
       setActionLoading(null)
     }
-  }, [currentDirectory, loadWorktrees])
+  }, [currentDirectory, loadWorktrees, handleOpenSession])
 
   // 删除 worktree
   const handleDelete = useCallback(async (directory: string) => {
@@ -143,29 +176,48 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-200/30">
         <div className="flex items-center gap-2 text-xs text-text-200">
           <GitWorktreeIcon size={14} className="text-text-400" />
-          <span className="font-medium">Git Worktrees</span>
-          {!loading && (
-            <span className="text-text-400">({worktrees.length})</span>
-          )}
+          <span className="font-medium">Git</span>
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={loadWorktrees}
+            onClick={() => { loadWorktrees(); refreshVcs() }}
             disabled={loading}
             className="p-1 rounded text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors"
             title="Refresh"
           >
             <RetryIcon size={12} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            disabled={!!actionLoading}
-            className="p-1 rounded text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors"
-            title="Create Worktree"
-          >
-            <PlusIcon size={12} />
-          </button>
         </div>
+      </div>
+
+      {/* VCS Branch */}
+      {vcsInfo?.branch && (
+        <div className="px-3 py-2 border-b border-border-200/20">
+          <div className="flex items-center gap-2">
+            <GitBranchIcon size={14} className="text-accent-main-100 shrink-0" />
+            <span className="text-xs font-mono text-text-100 truncate" title={vcsInfo.branch}>
+              {vcsInfo.branch}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Worktrees Section Header */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-200/20">
+        <div className="flex items-center gap-1.5 text-[11px] text-text-300">
+          <span className="font-medium">Worktrees</span>
+          {!loading && (
+            <span className="text-text-400">({worktrees.length})</span>
+          )}
+        </div>
+        <button
+          onClick={() => setShowCreateForm(true)}
+          disabled={!!actionLoading}
+          className="p-1 rounded text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors"
+          title="Create Worktree"
+        >
+          <PlusIcon size={12} />
+        </button>
       </div>
 
       {/* Error */}
@@ -219,6 +271,7 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
                 directory={wt}
                 name={getWorktreeName(wt)}
                 isLoading={actionLoading === `delete-${wt}` || actionLoading === `reset-${wt}`}
+                onOpenSession={() => handleOpenSession(wt)}
                 onDelete={() => setDeleteConfirm({ isOpen: true, directory: wt })}
                 onReset={() => setResetConfirm({ isOpen: true, directory: wt })}
               />
@@ -265,18 +318,19 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
 // ============================================
 
 interface CreateWorktreeFormProps {
-  onSubmit: (name: string) => void
+  onSubmit: (name: string, autoOpen: boolean) => void
   onCancel: () => void
   isLoading: boolean
 }
 
 function CreateWorktreeForm({ onSubmit, onCancel, isLoading }: CreateWorktreeFormProps) {
   const [name, setName] = useState('')
+  const [autoOpen, setAutoOpen] = useState(true)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (name.trim()) {
-      onSubmit(name)
+      onSubmit(name, autoOpen)
     }
   }
 
@@ -292,6 +346,16 @@ function CreateWorktreeForm({ onSubmit, onCancel, isLoading }: CreateWorktreeFor
         autoFocus
         disabled={isLoading}
       />
+      <label className="flex items-center gap-1.5 mt-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={autoOpen}
+          onChange={(e) => setAutoOpen(e.target.checked)}
+          disabled={isLoading}
+          className="rounded border-border-200 text-accent-main-100 focus:ring-accent-main-100/30 w-3.5 h-3.5"
+        />
+        <span className="text-[11px] text-text-300">Open session after creation</span>
+      </label>
       <div className="flex items-center justify-end gap-2 mt-2">
         <button
           type="button"
@@ -322,6 +386,7 @@ interface WorktreeItemProps {
   directory: string
   name: string
   isLoading: boolean
+  onOpenSession: () => void
   onDelete: () => void
   onReset: () => void
 }
@@ -330,6 +395,7 @@ const WorktreeItem = memo(function WorktreeItem({
   directory,
   name,
   isLoading,
+  onOpenSession,
   onDelete,
   onReset,
 }: WorktreeItemProps) {
@@ -353,6 +419,13 @@ const WorktreeItem = memo(function WorktreeItem({
         <SpinnerIcon size={12} className="animate-spin text-text-400 shrink-0" />
       ) : (
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button
+            onClick={onOpenSession}
+            className="p-1 rounded text-text-400 hover:text-accent-main-100 hover:bg-accent-main-100/10 transition-colors"
+            title="Open session in this worktree"
+          >
+            <ExternalLinkIcon size={12} />
+          </button>
           <button
             onClick={onReset}
             className="p-1 rounded text-text-400 hover:text-warning-100 hover:bg-warning-100/10 transition-colors"

@@ -12,6 +12,9 @@ import type {
   ApiQuestionRequest,
   GlobalEvent,
   EventCallbacks,
+  WorktreeReadyPayload,
+  WorktreeFailedPayload,
+  VcsBranchUpdatedPayload,
 } from './types'
 
 // ============================================
@@ -274,6 +277,15 @@ function handleEventForSubscriber(
       break
     case 'question.rejected':
       callbacks.onQuestionRejected?.(properties as { sessionID: string; requestID: string })
+      break
+    case 'worktree.ready':
+      callbacks.onWorktreeReady?.(properties as WorktreeReadyPayload)
+      break
+    case 'worktree.failed':
+      callbacks.onWorktreeFailed?.(properties as WorktreeFailedPayload)
+      break
+    case 'vcs.branch.updated':
+      callbacks.onVcsBranchUpdated?.(properties as VcsBranchUpdatedPayload)
       break
     default:
       // 忽略其他事件类型

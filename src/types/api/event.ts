@@ -68,6 +68,19 @@ export interface TodoUpdatedPayload {
   todos: TodoItem[]
 }
 
+export interface WorktreeReadyPayload {
+  name: string
+  branch: string
+}
+
+export interface WorktreeFailedPayload {
+  message: string
+}
+
+export interface VcsBranchUpdatedPayload {
+  branch?: string
+}
+
 // ============================================
 // Global Event Type
 // ============================================
@@ -169,5 +182,8 @@ export interface EventCallbacks {
   onQuestionRejected?: (data: QuestionRejectedPayload) => void
   onTodoUpdated?: (data: TodoUpdatedPayload) => void
   onProjectUpdated?: (project: Project) => void
+  onWorktreeReady?: (data: WorktreeReadyPayload) => void
+  onWorktreeFailed?: (data: WorktreeFailedPayload) => void
+  onVcsBranchUpdated?: (data: VcsBranchUpdatedPayload) => void
   onError?: (error: Error) => void
 }

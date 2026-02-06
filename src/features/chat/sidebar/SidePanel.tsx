@@ -17,9 +17,8 @@ import {
   MaximizeIcon,
   MinimizeIcon,
   ShareIcon,
-  GitBranchIcon,
 } from '../../../components/Icons'
-import { useDirectory, useSessionStats, formatTokens, formatCost, useVcsInfo } from '../../../hooks'
+import { useDirectory, useSessionStats, formatTokens, formatCost } from '../../../hooks'
 import type { ThemeMode } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/SessionContext'
 import { useMessageStore } from '../../../store'
@@ -88,8 +87,6 @@ export function SidePanel({
   const stats = useSessionStats(contextLimit)
   const hasMessages = messages.length > 0
   
-  // VCS info
-  const { vcsInfo } = useVcsInfo(currentDirectory)
   
   useEffect(() => {
     return subscribeToConnectionState(setConnectionState)
@@ -334,23 +331,6 @@ export function SidePanel({
           </div>
         </div>
       </div>
-
-      {/* ===== VCS Branch Info ===== */}
-      {showLabels && vcsInfo?.branch && (
-        <div className="mx-2 mt-1">
-          <div
-            className="h-7 flex items-center rounded-lg px-2 text-text-400 overflow-hidden"
-            title={`Branch: ${vcsInfo.branch}`}
-          >
-            <span className="size-4 flex items-center justify-center shrink-0">
-              <GitBranchIcon size={13} />
-            </span>
-            <span className="ml-1.5 text-[11px] font-mono truncate">
-              {vcsInfo.branch}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* ===== Main Content ===== */}
       <div 

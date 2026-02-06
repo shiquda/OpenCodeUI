@@ -135,6 +135,9 @@ export type {
   QuestionRejectedPayload,
   TodoItem,
   TodoUpdatedPayload,
+  WorktreeReadyPayload,
+  WorktreeFailedPayload,
+  VcsBranchUpdatedPayload,
 } from './event'
 export { EventTypes } from './event'
 

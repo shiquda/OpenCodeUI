@@ -94,6 +94,9 @@ export type {
 export type {
   GlobalEvent,
   EventCallbacks,
+  WorktreeReadyPayload,
+  WorktreeFailedPayload,
+  VcsBranchUpdatedPayload,
 } from '../types/api/event'
 
 // ============================================
