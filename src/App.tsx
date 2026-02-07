@@ -395,6 +395,7 @@ function App() {
                 onVariantChange={handleVariantChange}
                 supportsImages={currentModel?.supportsImages ?? false}
                 rootPath={effectiveDirectory}
+                sessionId={routeSessionId}
                 revertedText={revertedMessage?.text}
                 revertedAttachments={revertedMessage?.attachments}
                 canRedo={canRedo}

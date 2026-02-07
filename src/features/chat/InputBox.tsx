@@ -3,6 +3,7 @@ import { AttachmentPreview, type Attachment } from '../attachment'
 import { MentionMenu, detectMentionTrigger, type MentionMenuHandle, type MentionItem } from '../mention'
 import { SlashCommandMenu, type SlashCommandMenuHandle } from '../slash-command'
 import { InputToolbar } from './input/InputToolbar'
+import { InputFooter } from './input/InputFooter'
 import { UndoStatus } from './input/UndoStatus'
 import { useImageCompressor } from '../../hooks/useImageCompressor'
 import type { ApiAgent } from '../../api/client'
@@ -27,6 +28,7 @@ export interface InputBoxProps {
   onVariantChange?: (variant: string | undefined) => void
   supportsImages?: boolean
   rootPath?: string
+  sessionId?: string | null
   // Undo/Redo
   revertedText?: string
   revertedAttachments?: Attachment[]
@@ -58,6 +60,7 @@ function InputBoxComponent({
   onVariantChange,
   supportsImages = false,
   rootPath = '',
+  sessionId,
   revertedText,
   revertedAttachments,
   canRedo = false,
@@ -609,15 +612,8 @@ function InputBoxComponent({
             </div>
           </div>
 
-          {/* Disclaimer */}
-          <div className="flex justify-center pt-2 text-text-500">
-            <button 
-              onClick={onNewChat}
-              className="text-[11px] hover:text-text-300 transition-colors text-center"
-            >
-              AI can make mistakes. Please double-check responses.
-            </button>
-          </div>
+          {/* Footer: disclaimer + todo progress */}
+          <InputFooter sessionId={sessionId} onNewChat={onNewChat} />
         </div>
       </div>
     </div>

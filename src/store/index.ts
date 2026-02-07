@@ -24,3 +24,6 @@ export { keybindingStore, parseKeybinding, formatKeybinding, keyEventToString, m
 export type { KeybindingAction, KeybindingConfig, ParsedKeybinding } from './keybindingStore'
 
 export { messageCacheStore } from './messageCacheStore'
+
+export { todoStore, useTodos, useTodoStats, useCurrentTask } from './todoStore'
+export type { SessionTodos } from './todoStore'

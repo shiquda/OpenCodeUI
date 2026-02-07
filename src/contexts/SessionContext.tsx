@@ -8,6 +8,7 @@ import {
   type SessionListParams 
 } from '../api'
 import { childSessionStore } from '../store/childSessionStore'
+import { todoStore } from '../store/todoStore'
 import { useDirectory } from './DirectoryContext'
 import { sessionErrorHandler, normalizeToForwardSlash, isSameDirectory, autoDetectPathStyle } from '../utils'
 
@@ -139,6 +140,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           updated[index] = session
           return updated
         })
+      },
+      onTodoUpdated: (data) => {
+        // 更新 todoStore
+        todoStore.setTodos(data.sessionID, data.todos)
       },
     })
 

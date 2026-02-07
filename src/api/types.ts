@@ -97,6 +97,8 @@ export type {
   WorktreeReadyPayload,
   WorktreeFailedPayload,
   VcsBranchUpdatedPayload,
+  TodoUpdatedPayload,
+  TodoItem,
 } from '../types/api/event'
 
 // ============================================

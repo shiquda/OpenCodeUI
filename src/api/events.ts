@@ -15,6 +15,7 @@ import type {
   WorktreeReadyPayload,
   WorktreeFailedPayload,
   VcsBranchUpdatedPayload,
+  TodoUpdatedPayload,
 } from './types'
 
 // ============================================
@@ -286,6 +287,9 @@ function handleEventForSubscriber(
       break
     case 'vcs.branch.updated':
       callbacks.onVcsBranchUpdated?.(properties as VcsBranchUpdatedPayload)
+      break
+    case 'todo.updated':
+      callbacks.onTodoUpdated?.(properties as TodoUpdatedPayload)
       break
     default:
       // 忽略其他事件类型
