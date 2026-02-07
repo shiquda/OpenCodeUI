@@ -26,6 +26,19 @@ import { updateSession, subscribeToConnectionState, type ApiSession, type Connec
 import { uiErrorHandler } from '../../../utils'
 import type { SessionStats } from '../../../hooks'
 
+// 获取路径的父目录部分（用于显示项目位置）
+function getParentPath(fullPath: string): string {
+  // 处理 Windows 和 Unix 路径
+  const sep = fullPath.includes('\\') ? '\\' : '/'
+  const parts = fullPath.split(sep)
+  // 移除最后一个部分（文件夹名本身）
+  parts.pop()
+  if (parts.length === 0) return sep
+  // Windows: 保留盘符，Unix: 保留开头的 /
+  const parent = parts.join(sep)
+  return parent || sep
+}
+
 // Claude.ai 设计模式：
 // - 按钮结构统一，不因 expanded/collapsed 改变 DOM
 // - 按钮内容使用 -translate-x-2 让图标在收起时居中
@@ -296,13 +309,20 @@ export function SidePanel({
                     }`}
                     title={project.worktree}
                   >
-                    <span className="w-5 h-5 flex items-center justify-center">
+                    <span className="w-5 h-5 flex items-center justify-center shrink-0">
                       {isGlobal 
                         ? <GlobeIcon size={14} className="text-accent-main-100" /> 
                         : <FolderIcon size={14} />
                       }
                     </span>
-                    <span className="flex-1 text-xs text-left truncate">{project.name}</span>
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="text-xs truncate">{project.name}</div>
+                      {!isGlobal && project.worktree && (
+                        <div className="text-[10px] text-text-400 truncate font-mono opacity-70">
+                          {getParentPath(project.worktree)}
+                        </div>
+                      )}
+                    </div>
                     {!isGlobal && (
                       <button
                         onClick={(e) => {
