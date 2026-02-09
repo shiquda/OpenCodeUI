@@ -15,17 +15,20 @@ COPY . .
 ENV VITE_API_BASE_URL=/api
 RUN npm run build
 
-# ---- Stage 2: 运行时 ----
-FROM alpine:3.21
+# ---- Stage 2: 运行时 (Debian slim for glibc/PTY compatibility) ----
+FROM debian:bookworm-slim
 
-# opencode 需要的运行时依赖
-RUN apk add --no-cache \
-    bash \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     git \
-    caddy \
-    libgcc \
-    libstdc++
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 caddy
+RUN curl -fsSL https://caddyserver.com/api/download?os=linux&arch=amd64 -o /usr/local/bin/caddy \
+    && chmod +x /usr/local/bin/caddy
 
 # 官方方式安装 opencode
 RUN curl -fsSL https://opencode.ai/install | bash \
