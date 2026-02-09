@@ -158,6 +158,52 @@ export const FileExplorer = memo(function FileExplorer({
     document.addEventListener('mouseup', handleMouseUp)
   }, [])
 
+  // 触摸拖拽调整高度
+  const handleTouchResizeStart = useCallback((e: React.TouchEvent) => {
+    const container = containerRef.current
+    const treeEl = treeRef.current
+    if (!container || !treeEl) return
+
+    setIsResizing(true)
+
+    const containerRect = container.getBoundingClientRect()
+    const startY = e.touches[0].clientY
+    const startHeight = currentHeightRef.current ?? containerRect.height * 0.4
+
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      moveEvent.preventDefault()
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+
+      rafRef.current = requestAnimationFrame(() => {
+        const deltaY = moveEvent.touches[0].clientY - startY
+        const newHeight = startHeight + deltaY
+        const maxHeight = containerRect.height - MIN_PREVIEW_HEIGHT
+        const clampedHeight = Math.min(Math.max(newHeight, MIN_TREE_HEIGHT), maxHeight)
+        treeEl.style.setProperty('--tree-height', `${clampedHeight}px`)
+        currentHeightRef.current = clampedHeight
+      })
+    }
+
+    const handleTouchEnd = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+
+      setIsResizing(false)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleTouchEnd)
+
+      if (currentHeightRef.current !== null) {
+        setTreeHeight(currentHeightRef.current)
+      }
+    }
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false })
+    document.addEventListener('touchend', handleTouchEnd)
+  }, [])
+
   // 是否显示预览
   const showPreview = previewContent || previewLoading || previewError
 
@@ -231,16 +277,17 @@ export const FileExplorer = memo(function FileExplorer({
         </div>
       </div>
 
-      {/* Resize Handle - 扩大拖拽区域 */}
+      {/* Resize Handle - 扩大拖拽区域，支持触摸 */}
       {showPreview && (
         <div
           className={`
-            h-1.5 cursor-row-resize shrink-0 relative
-            hover:bg-accent-main-100/50 transition-colors
+            h-2.5 cursor-row-resize shrink-0 relative
+            hover:bg-accent-main-100/50 active:bg-accent-main-100 transition-colors
             border-t border-border-200
             ${isResizing ? 'bg-accent-main-100' : 'bg-transparent'}
           `}
           onMouseDown={handleResizeStart}
+          onTouchStart={handleTouchResizeStart}
         />
       )}
 

@@ -26,6 +26,51 @@ export function Dialog({
   const [isVisible, setIsVisible] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
 
+  // 触摸下滑关闭手势
+  const touchStartY = useRef<number | null>(null)
+  const touchStartX = useRef<number | null>(null)
+  const dragOffsetY = useRef(0)
+  const [dragY, setDragY] = useState(0)
+  const isDragging = useRef(false)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement
+    // 如果触摸点在可滚动区域内且不是顶部，不触发下滑手势
+    const scrollableParent = target.closest('.overflow-y-auto, .custom-scrollbar')
+    if (scrollableParent && scrollableParent.scrollTop > 0) return
+    
+    touchStartY.current = e.touches[0].clientY
+    touchStartX.current = e.touches[0].clientX
+    dragOffsetY.current = 0
+    isDragging.current = false
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current === null || touchStartX.current === null) return
+    
+    const deltaY = e.touches[0].clientY - touchStartY.current
+    const deltaX = Math.abs(e.touches[0].clientX - touchStartX.current)
+    
+    // 只在向下拖且垂直方向为主时触发
+    if (deltaY > 10 && deltaY > deltaX) {
+      isDragging.current = true
+      dragOffsetY.current = deltaY
+      setDragY(deltaY)
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    if (isDragging.current && dragOffsetY.current > 100) {
+      // 下滑超过 100px，关闭
+      onClose()
+    }
+    touchStartY.current = null
+    touchStartX.current = null
+    dragOffsetY.current = 0
+    isDragging.current = false
+    setDragY(0)
+  }, [onClose])
+
   // Focus trap
   const handleFocusTrap = useCallback((e: KeyboardEvent) => {
     if (e.key !== 'Tab' || !dialogRef.current) return
@@ -101,21 +146,32 @@ export function Dialog({
       {/* Dialog Panel */}
       <div 
         ref={dialogRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className={`
           relative bg-bg-000 border border-border-200 rounded-xl shadow-2xl 
-          flex flex-col overflow-hidden transition-all duration-200 ease-out
+          flex flex-col overflow-hidden
+          ${isDragging.current ? '' : 'transition-all duration-200 ease-out'}
           ${className}
         `}
         style={{ 
           width: typeof width === 'number' ? `${width}px` : width, 
           maxWidth: '100%',
-          opacity: isVisible ? 1 : 0,
-          transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(8px)',
+          opacity: isVisible ? (dragY > 0 ? Math.max(0.3, 1 - dragY / 300) : 1) : 0,
+          transform: isVisible 
+            ? `scale(1) translateY(${dragY}px)` 
+            : 'scale(0.95) translateY(8px)',
         }}
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag Indicator (mobile) */}
+        <div className="md:hidden flex justify-center pt-2 pb-0 shrink-0">
+          <div className="w-8 h-1 rounded-full bg-bg-300" />
+        </div>
+
         {/* Header */}
         {(title || showCloseButton) && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border-100/50">
@@ -123,7 +179,7 @@ export function Dialog({
             {showCloseButton && (
               <button 
                 onClick={onClose}
-                className="p-1 text-text-400 hover:text-text-200 hover:bg-bg-100 rounded-md transition-colors"
+                className="p-2 text-text-400 hover:text-text-200 hover:bg-bg-100 rounded-md transition-colors"
               >
                 <CloseIcon size={18} />
               </button>

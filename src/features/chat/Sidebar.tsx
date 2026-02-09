@@ -155,7 +155,41 @@ export const Sidebar = memo(function Sidebar({
 
   // ============================================
   // 移动端：Sidebar 完全不占位，作为 overlay 显示
+  // 支持触摸滑动关闭
   // ============================================
+  
+  // 滑动关闭手势状态
+  const touchStartX = useRef(0)
+  const touchDeltaX = useRef(0)
+  const [swipeX, setSwipeX] = useState(0)
+  const isSwiping = useRef(false)
+
+  const handleSidebarTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchDeltaX.current = 0
+    isSwiping.current = false
+  }, [])
+
+  const handleSidebarTouchMove = useCallback((e: React.TouchEvent) => {
+    const deltaX = e.touches[0].clientX - touchStartX.current
+    // 只有向左滑时才触发
+    if (deltaX < -10) {
+      isSwiping.current = true
+      touchDeltaX.current = deltaX
+      setSwipeX(deltaX)
+    }
+  }, [])
+
+  const handleSidebarTouchEnd = useCallback(() => {
+    if (isSwiping.current && touchDeltaX.current < -80) {
+      // 滑动超过 80px，关闭侧边栏
+      onClose()
+    }
+    isSwiping.current = false
+    touchDeltaX.current = 0
+    setSwipeX(0)
+  }, [onClose])
+
   if (isMobile) {
     return (
       <>
@@ -171,13 +205,21 @@ export const Sidebar = memo(function Sidebar({
 
         {/* Mobile Sidebar Overlay */}
         <div 
+          onTouchStart={handleSidebarTouchStart}
+          onTouchMove={handleSidebarTouchMove}
+          onTouchEnd={handleSidebarTouchEnd}
           className={`
             fixed inset-y-0 left-0 z-40 
             flex flex-col bg-bg-100 shadow-xl
-            transition-transform duration-300 ease-out
+            ${isSwiping.current ? '' : 'transition-transform duration-300 ease-out'}
             ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           `}
-          style={{ width: `${DEFAULT_WIDTH}px` }}
+          style={{ 
+            width: `${DEFAULT_WIDTH}px`,
+            transform: isOpen 
+              ? `translateX(${Math.min(0, swipeX)}px)` 
+              : `translateX(-100%)`,
+          }}
         >
           {/* 和桌面端展开时一样的内容 */}
           <SidePanel

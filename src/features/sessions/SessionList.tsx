@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { SearchIcon, PencilIcon, TrashIcon, ComposeIcon } from '../../components/Icons'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { useIsMobile } from '../../hooks'
 import type { ApiSession } from '../../api'
 
 interface SessionListProps {
@@ -238,16 +239,23 @@ interface SessionItemProps {
 function SessionItem({ session, isSelected, onSelect, onDelete, onRename, density = 'default', showStats = true }: SessionItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(session.title || '')
+  const [showActions, setShowActions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchMoved = useRef(false)
+  const itemRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
   const isCompact = density === 'compact'
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setShowActions(false)
     onDelete()
   }
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setShowActions(false)
     setEditTitle(session.title || '')
     setIsEditing(true)
   }
@@ -273,12 +281,69 @@ function SessionItem({ session, isSelected, onSelect, onDelete, onRename, densit
     }
   }
 
+  // 长按触摸手势：显示操作按钮
+  const handleTouchStart = useCallback(() => {
+    touchMoved.current = false
+    longPressTimer.current = setTimeout(() => {
+      if (!touchMoved.current) {
+        setShowActions(true)
+      }
+    }, 500)
+  }, [])
+
+  const handleTouchMove = useCallback(() => {
+    touchMoved.current = true
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }, [])
+
+  // 点击外部收起操作按钮
+  useEffect(() => {
+    if (!showActions) return
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (itemRef.current && !itemRef.current.contains(e.target as Node)) {
+        setShowActions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [showActions])
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus()
       inputRef.current.select()
     }
   }, [isEditing])
+
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    }
+  }, [])
+
+  const handleClick = () => {
+    // 如果操作按钮已显示，点击空白区域收起它，不触发 select
+    if (showActions) {
+      setShowActions(false)
+      return
+    }
+    onSelect()
+  }
 
   if (isEditing) {
     return (
@@ -291,20 +356,28 @@ function SessionItem({ session, isSelected, onSelect, onDelete, onRename, densit
           onBlur={handleSaveEdit}
           onKeyDown={handleKeyDown}
           onClick={(e) => e.stopPropagation()}
-          className="w-full bg-bg-000 border border-accent-main-100/50 rounded px-2 py-0.5 text-sm text-text-100 focus:outline-none focus:ring-1 focus:ring-accent-main-100/30 leading-relaxed"
+          className="w-full bg-bg-000 border border-accent-main-100/50 rounded px-2 py-1.5 text-sm text-text-100 focus:outline-none focus:ring-1 focus:ring-accent-main-100/30 leading-relaxed"
         />
       </div>
     )
   }
 
+  // 移动端操作按钮是否可见：长按触发的 showActions 状态
+  // 桌面端：hover 触发
+  const actionsVisible = isMobile ? showActions : false
+
   return (
     <div
-      onClick={onSelect}
-      className={`group relative flex items-start ${isCompact ? 'px-3 py-2' : 'px-3 py-2.5'} rounded-lg cursor-pointer transition-all duration-200 border border-transparent ${
+      ref={itemRef}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className={`group relative flex items-start ${isCompact ? 'px-3 py-2' : 'px-3 py-2.5'} rounded-lg cursor-pointer transition-all duration-200 border border-transparent select-none ${
         isSelected
           ? 'bg-bg-000 shadow-sm ring-1 ring-border-200/50' 
           : 'hover:bg-bg-200/50'
-      }`}
+      } ${showActions ? 'bg-bg-200/50' : ''}`}
     >
       <div className="flex-1 min-w-0 pr-1">
         {/* Row 1: Title + Time/Actions */}
@@ -317,25 +390,29 @@ function SessionItem({ session, isSelected, onSelect, onDelete, onRename, densit
           </p>
           
           <div className="relative flex-shrink-0 flex justify-end min-w-[60px]">
-            {/* Time: Hidden on hover */}
+            {/* Time: Hidden when actions visible */}
             {session.time?.updated && (
-              <span className="text-[10px] text-text-400 opacity-60 transition-opacity duration-200 absolute right-0 top-0.5 group-hover:opacity-0">
+              <span className={`text-[10px] text-text-400 opacity-60 transition-opacity duration-200 absolute right-0 top-0.5 ${actionsVisible ? 'opacity-0' : ''} group-hover:opacity-0`}>
                 {formatRelativeTime(session.time.updated)}
               </span>
             )}
             
-            {/* Actions: Visible ONLY on hover */}
-            <div className="flex items-center gap-1 transition-all duration-200 z-10 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
+            {/* Actions: hover on desktop, long-press on mobile */}
+            <div className={`flex items-center gap-1 transition-all duration-200 z-10 ${
+              actionsVisible 
+                ? 'opacity-100 pointer-events-auto' 
+                : 'opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto'
+            }`}>
               <button
                 onClick={handleStartEdit}
-                className="p-1.5 rounded-md hover:bg-bg-300 text-text-400 hover:text-text-100 transition-colors focus:outline-none focus:ring-1 focus:ring-accent-main-100/50"
+                className="p-2 rounded-md hover:bg-bg-300 active:bg-bg-300 text-text-400 hover:text-text-100 transition-colors focus:outline-none"
                 title="Rename"
               >
                 <PencilIcon className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1.5 rounded-md hover:bg-danger-bg text-text-400 hover:text-danger-100 transition-colors focus:outline-none focus:ring-1 focus:ring-danger-100/50"
+                className="p-2 rounded-md hover:bg-danger-bg active:bg-danger-bg text-text-400 hover:text-danger-100 active:text-danger-100 transition-colors focus:outline-none"
                 title="Delete"
               >
                 <TrashIcon className="w-3.5 h-3.5" />

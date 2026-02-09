@@ -423,8 +423,59 @@ const PanelTabButton = memo(function PanelTabButton({
     onDragStart()
   }
 
+  // 触摸拖拽支持
+  const touchStartPos = useRef({ x: 0, y: 0 })
+  const touchMoved = useRef(false)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    touchMoved.current = false
+    
+    // 长按 300ms 开始拖拽
+    longPressTimer.current = setTimeout(() => {
+      if (!touchMoved.current) {
+        onDragStart()
+      }
+    }, 300)
+  }, [onDragStart])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - touchStartPos.current.x)
+    const dy = Math.abs(e.touches[0].clientY - touchStartPos.current.y)
+    if (dx > 5 || dy > 5) {
+      touchMoved.current = true
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    }
+    // 如果正在拖拽，找到当前 touch 所在的 tab 触发 dragOver
+    if (isDragging) {
+      const target = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY)
+      const tabEl = target?.closest('[data-tab-id]')
+      if (tabEl) {
+        const tabId = tabEl.getAttribute('data-tab-id')
+        if (tabId && tabId !== tab.id) {
+          onDragOver()
+        }
+      }
+    }
+  }, [isDragging, tab.id, onDragOver])
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    if (isDragging) {
+      onDragEnd()
+    }
+  }, [isDragging, onDragEnd])
+
   return (
     <div
+      data-tab-id={tab.id}
       draggable
       onDragStart={handleDragStart}
       onDragOver={(e) => {
@@ -434,6 +485,9 @@ const PanelTabButton = memo(function PanelTabButton({
       onDragEnd={onDragEnd}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       className={`
         group flex items-center gap-1.5 px-2 py-1 rounded-md text-xs shrink-0
         border border-transparent cursor-pointer select-none
@@ -471,6 +525,7 @@ const PanelTabButton = memo(function PanelTabButton({
           onDragStart={(e) => e.stopPropagation()}
           draggable={false}
           className={`
+            touch-target-sm
             p-1 -mr-0.5 rounded shrink-0
             transition-all duration-150 ease-out
             hover:bg-danger-100/20 text-text-400 hover:text-danger-100

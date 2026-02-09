@@ -5,9 +5,9 @@ import {
   SunIcon, MoonIcon, SystemIcon, MaximizeIcon, MinimizeIcon, 
   PathAutoIcon, PathUnixIcon, PathWindowsIcon,
   GlobeIcon, PlusIcon, TrashIcon, CheckIcon, WifiIcon, WifiOffIcon, SpinnerIcon, KeyIcon,
-  SettingsIcon, KeyboardIcon
+  SettingsIcon, KeyboardIcon, CloseIcon
 } from '../../components/Icons'
-import { usePathMode, useServerStore } from '../../hooks'
+import { usePathMode, useServerStore, useIsMobile } from '../../hooks'
 import { autoApproveStore } from '../../store'
 import { KeybindingsSection } from './KeybindingsSection'
 import type { ThemeMode } from '../../hooks'
@@ -41,11 +41,11 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
       role="switch"
       aria-checked={enabled}
       onClick={(e) => { e.stopPropagation(); onChange() }}
-      className={`relative w-9 h-5 rounded-full transition-colors duration-200 
+      className={`relative w-11 h-6 rounded-full transition-colors duration-200 
         ${enabled ? 'bg-accent-main-100' : 'bg-bg-300'}`}
     >
-      <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 
-        ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+      <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 
+        ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
     </button>
   )
 }
@@ -190,7 +190,7 @@ function ServerItem({ server, health, isActive, onSelect, onDelete, onCheckHealt
         <div className="text-[11px] text-text-400 truncate font-mono">{server.url}</div>
       </div>
       <button 
-        className="p-1 rounded hover:bg-bg-200 transition-colors"
+        className="p-2 rounded hover:bg-bg-200 transition-colors"
         onClick={(e) => { e.stopPropagation(); onCheckHealth() }}
         title={statusTitle()}
       >
@@ -198,8 +198,8 @@ function ServerItem({ server, health, isActive, onSelect, onDelete, onCheckHealt
       </button>
       {!server.isDefault && (
         <button 
-          className="p-1 rounded text-text-400 hover:text-danger-100 hover:bg-danger-100/10 
-                     opacity-0 group-hover:opacity-100 transition-all"
+          className="p-2 rounded text-text-400 hover:text-danger-100 hover:bg-danger-100/10 
+                     md:opacity-0 md:group-hover:opacity-100 transition-all"
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           title="Remove"
         >
@@ -397,6 +397,7 @@ export function SettingsDialog({
   isOpen, onClose, themeMode, onThemeChange, isWideMode, onToggleWideMode, initialTab = 'general',
 }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab)
+  const isMobile = useIsMobile()
   
   useEffect(() => { if (isOpen) setTab(initialTab) }, [isOpen, initialTab])
 
@@ -411,6 +412,57 @@ export function SettingsDialog({
     }
   }, [tab])
 
+  // 移动端：顶部 tab 切换 + 全屏内容
+  if (isMobile) {
+    return (
+      <Dialog isOpen={isOpen} onClose={onClose} title="" width="100%" showCloseButton={false}>
+        <div className="flex flex-col -m-5" style={{ height: '80vh' }}>
+          {/* Top: Title + Close */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border-100/50 shrink-0">
+            <div className="text-sm font-semibold text-text-100">Settings</div>
+            <button
+              onClick={onClose}
+              className="p-2 text-text-400 hover:text-text-200 hover:bg-bg-100 rounded-md transition-colors -mr-1"
+            >
+              <CloseIcon size={18} />
+            </button>
+          </div>
+
+          {/* Tab Bar - 横向排列 */}
+          <div className="flex items-center gap-1 px-3 py-2 border-b border-border-100/50 shrink-0">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors
+                  ${t.id === tab
+                    ? 'bg-bg-100 text-text-100'
+                    : 'text-text-400 active:bg-bg-100/50'}`}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-h-0 py-4 px-4 overflow-y-auto custom-scrollbar">
+            {tab === 'general' && (
+              <GeneralSettings
+                themeMode={themeMode}
+                onThemeChange={onThemeChange}
+                isWideMode={isWideMode}
+                onToggleWideMode={onToggleWideMode}
+              />
+            )}
+            {tab === 'keybindings' && <KeybindingsSection />}
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
+  // 桌面端：左侧导航 + 右侧内容
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title="" width={680} showCloseButton={false}>
       <div className="flex h-[520px] -m-5">
