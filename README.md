@@ -53,7 +53,7 @@
 
 ```bash
 # 克隆
-git clone https://github.com/<your-username>/OpenCodeUI.git
+git clone https://github.com/lehhair/OpenCodeUI.git
 cd OpenCodeUI
 
 # 安装依赖
