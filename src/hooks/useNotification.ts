@@ -2,7 +2,7 @@
 // useNotification - 浏览器通知
 // ============================================
 //
-// 当 AI 完成回复且页面不在前台时，发送浏览器通知
+// 当 AI 完成回复、请求权限、提问或出错时，发送浏览器通知
 // 点击通知可以跳转到对应 session
 
 import { useState, useCallback, useEffect, useRef } from 'react'
@@ -62,12 +62,13 @@ export function useNotification() {
   }, [])
 
   // 发送通知
+  // 始终发送，不检查页面是否在前台：
+  // - 桌面端：切标签页/最小化时能收到
+  // - 移动端：在前台时也发（因为切后台 JS 冻结，不发就完全收不到）
   const sendNotification = useCallback((title: string, body: string, data?: NotificationData) => {
     if (!enabledRef.current) return
     if (typeof Notification === 'undefined') return
     if (Notification.permission !== 'granted') return
-    // 页面在前台时不发通知
-    if (document.hasFocus()) return
 
     try {
       const notification = new Notification(title, {
