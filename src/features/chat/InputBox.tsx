@@ -249,8 +249,8 @@ function InputBoxComponent({
       return
     }
     
-    // Enter 发送（Shift+Enter 换行）
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Ctrl+Enter / Cmd+Enter 发送
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       handleSend()
     }
