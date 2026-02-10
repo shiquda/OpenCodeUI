@@ -215,9 +215,13 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
   }, [currentDir, onSelect, onClose])
 
   const handleConfirmCurrent = useCallback(() => {
-    const path = inputValue.endsWith(PATH_SEP) ? inputValue.slice(0, -1) : inputValue
-    // 不允许添加空路径或根路径
-    if (!path || path === '.' || path === '/') return
+    // 去掉尾斜杠，但保留根路径（/ 或 C:/）
+    let path = inputValue
+    if (path.endsWith(PATH_SEP) && path !== PATH_SEP && !/^[a-zA-Z]:\/$/.test(path)) {
+      path = path.slice(0, -1)
+    }
+    // 只阻止空路径和 "."
+    if (!path || path === '.') return
     onSelect(path)
     onClose()
   }, [inputValue, onSelect, onClose])
@@ -259,8 +263,12 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
             onClose()
           }
         } else {
-          const path = inputValue.endsWith(PATH_SEP) ? inputValue.slice(0, -1) : inputValue
-          if (path && path !== '.' && path !== '/') {
+          // 去掉尾斜杠，但保留根路径（/ 或 C:/）
+          let path = inputValue
+          if (path.endsWith(PATH_SEP) && path !== PATH_SEP && !/^[a-zA-Z]:\/$/.test(path)) {
+            path = path.slice(0, -1)
+          }
+          if (path && path !== '.') {
             onSelect(path)
             onClose()
           }

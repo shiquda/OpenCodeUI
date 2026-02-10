@@ -145,7 +145,14 @@ export function isWindowsPathMode(): boolean {
 export function formatPathForApi(dir: string | undefined | null): string | undefined {
   if (!dir) return undefined
   
-  const trimmed = dir.replace(/[/\\]+$/, '') // 移除末尾斜杠
+  let trimmed = dir.replace(/[/\\]+$/, '') // 移除末尾斜杠
+  
+  // 根路径保护：/ → ""，C:/ → "C:"，需要恢复斜杠
+  if (!trimmed) {
+    trimmed = '/'
+  } else if (/^[a-zA-Z]:$/.test(trimmed)) {
+    trimmed = trimmed + '/'
+  }
   
   if (isWindowsPathMode()) {
     return trimmed.replace(/\//g, '\\')
