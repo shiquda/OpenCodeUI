@@ -258,7 +258,7 @@ const DesktopAperture = memo(function DesktopAperture({
         hidden md:flex flex-col items-end
         absolute right-3.5 top-1/2 -translate-y-1/2 z-[5]
         max-h-[65vh] overflow-y-auto scrollbar-none
-        pl-10 pr-1 select-none
+        pl-4 pr-1 select-none
       "
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
@@ -271,14 +271,14 @@ const DesktopAperture = memo(function DesktopAperture({
             key={entry.messageId}
             data-oi
             data-active={isActive ? '1' : '0'}
-            className="flex items-center justify-end cursor-pointer"
+            className="relative flex items-center justify-end cursor-pointer"
             style={{ marginTop: `${MARGIN_MIN}px`, marginBottom: `${MARGIN_MIN}px` }}
             onClick={() => handleClick(entry.index)}
           >
-            {/* Label（在 tick 左侧） */}
+            {/* Label — absolute 定位，不撑大触发区域 */}
             <div
               data-label
-              className="mr-2.5 text-[13px] leading-none text-text-200 whitespace-nowrap pointer-events-none"
+              className="absolute right-full mr-2.5 text-[13px] leading-none text-text-200 whitespace-nowrap pointer-events-none"
               style={{ opacity: 0, transform: 'translateX(10px)', visibility: 'hidden' }}
             >
               {entry.title}
@@ -506,7 +506,7 @@ const MobileAperture = memo(function MobileAperture({
         className="
           absolute right-0 top-1/2 -translate-y-1/2 z-[15]
           flex flex-col items-end
-          pr-1.5 pl-6 py-4
+          pr-1.5 pl-4 py-4
           select-none
         "
         onTouchStart={handleTouchStart}
@@ -521,16 +521,16 @@ const MobileAperture = memo(function MobileAperture({
               key={entry.messageId}
               data-moi
               data-active={isVisibleEntry ? '1' : '0'}
-              className="flex items-center justify-end"
+              className="relative flex items-center justify-end"
               style={{
                 marginTop: `${MOBILE_MARGIN_MIN}px`,
                 marginBottom: `${MOBILE_MARGIN_MIN}px`,
               }}
             >
-              {/* Label */}
+              {/* Label — absolute 定位，不撑大触发区域 */}
               <div
                 data-mlabel
-                className="mr-2.5 text-sm leading-none text-text-200 whitespace-nowrap pointer-events-none"
+                className="absolute right-full mr-2.5 text-sm leading-none text-text-200 whitespace-nowrap pointer-events-none"
                 style={{ opacity: 0, transform: 'translateX(12px)', visibility: 'hidden' }}
               >
                 {truncate(entry.title, 14)}
