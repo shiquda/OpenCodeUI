@@ -116,15 +116,6 @@ export function InputToolbar({
   return (
     <div
       className="flex items-center justify-between px-3 pb-3 relative"
-      onMouseDown={(e) => {
-        // 只在虚拟键盘已打开时才阻止焦点转移（保持键盘不收起）
-        // 键盘收起时不阻止，让焦点自然转移到按钮，避免键盘被重新唤起
-        const vp = window.visualViewport
-        const keyboardOpen = vp ? (window.innerHeight - vp.height) > 100 : false
-        if (keyboardOpen) {
-          e.preventDefault()
-        }
-      }}
     >
       {/* Left side: Agent + Variant selectors */}
       <div className="flex items-center gap-2">

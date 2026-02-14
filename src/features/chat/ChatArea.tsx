@@ -116,6 +116,20 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
   // 向上滚动加载更多历史消息的 loading 状态
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const isLoadingMoreRef = useRef(false)
+  // 用户是否在列表顶部附近（用于决定是否显示加载 spinner）
+  const [isNearTop, setIsNearTop] = useState(false)
+  
+  // 监听 scrollParent 滚动，追踪是否在顶部附近
+  useEffect(() => {
+    if (!scrollParent) return
+    const THRESHOLD = 150
+    const handleScroll = () => {
+      setIsNearTop(scrollParent.scrollTop < THRESHOLD)
+    }
+    handleScroll() // 初始检查
+    scrollParent.addEventListener('scroll', handleScroll, { passive: true })
+    return () => scrollParent.removeEventListener('scroll', handleScroll)
+  }, [scrollParent])
   
   // 包装 onLoadMore，追踪加载状态（带最小展示时间防止闪烁）
   const handleLoadMore = useCallback(async () => {
@@ -333,8 +347,8 @@ export const ChatArea = memo(forwardRef<ChatAreaHandle, ChatAreaProps>(({
           </div>
         </div>
       )}
-      {/* 向上加载历史消息的顶部 spinner */}
-      {isLoadingMore && (
+      {/* 向上加载历史消息的顶部 spinner：仅在用户停留在顶部时显示 */}
+      {isLoadingMore && isNearTop && (
         <div className="absolute top-24 left-0 right-0 z-10 flex justify-center pointer-events-none">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-bg-100/90 border border-border-200 shadow-sm text-text-400 animate-in fade-in slide-in-from-top-2 duration-200">
             <SpinnerIcon size={14} className="animate-spin" />

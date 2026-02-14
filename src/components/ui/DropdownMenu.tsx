@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 
 type DropdownPosition = 'top' | 'bottom'
@@ -45,28 +45,54 @@ export function DropdownMenu({
     }
   }, [isOpen])
 
-  // Calculate position
-  useEffect(() => {
-    if (shouldRender && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      const gap = 8
-      const newStyle: React.CSSProperties = {}
+  // 位置计算函数，提出来便于多处调用
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    const gap = 8
+    const newStyle: React.CSSProperties = {}
 
-      if (position === 'top') {
-        newStyle.bottom = window.innerHeight - rect.top + gap
-      } else {
-        newStyle.top = rect.bottom + gap
-      }
-
-      if (align === 'right') {
-        newStyle.right = window.innerWidth - rect.right
-      } else {
-        newStyle.left = rect.left
-      }
-
-      setStyle(newStyle)
+    if (position === 'top') {
+      newStyle.bottom = window.innerHeight - rect.top + gap
+    } else {
+      newStyle.top = rect.bottom + gap
     }
-  }, [shouldRender, triggerRef, position, align])
+
+    if (align === 'right') {
+      newStyle.right = window.innerWidth - rect.right
+    } else {
+      newStyle.left = rect.left
+    }
+
+    setStyle(newStyle)
+  }, [triggerRef, position, align])
+
+  // 初次渲染时计算位置
+  useEffect(() => {
+    if (shouldRender) {
+      updatePosition()
+    }
+  }, [shouldRender, updatePosition])
+
+  // 实时跟随：监听 visualViewport resize（键盘弹起/收起）和 window resize
+  useEffect(() => {
+    if (!shouldRender) return
+
+    const vp = window.visualViewport
+    if (vp) {
+      vp.addEventListener('resize', updatePosition)
+      vp.addEventListener('scroll', updatePosition)
+    }
+    window.addEventListener('resize', updatePosition)
+
+    return () => {
+      if (vp) {
+        vp.removeEventListener('resize', updatePosition)
+        vp.removeEventListener('scroll', updatePosition)
+      }
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [shouldRender, updatePosition])
 
   if (!shouldRender) return null
 
@@ -74,14 +100,6 @@ export function DropdownMenu({
     <div
       className="fixed z-[100]"
       style={style}
-      onMouseDown={(e) => {
-        // 只在虚拟键盘已打开时才阻止焦点转移
-        const vp = window.visualViewport
-        const keyboardOpen = vp ? (window.innerHeight - vp.height) > 100 : false
-        if (keyboardOpen) {
-          e.preventDefault()
-        }
-      }}
     >
       <div
         className={`
