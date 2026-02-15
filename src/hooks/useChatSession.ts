@@ -200,10 +200,13 @@ export function useChatSession({ chatAreaRef, currentModel, refetchModels }: Use
         directory: effectiveDirectory,
       })
     },
-    onReconnected: () => {
+    onReconnected: (_reason) => {
       // SSE 重连后重新加载当前会话，补齐断连期间可能丢失的消息
       if (routeSessionId) {
-        loadSession(routeSessionId)
+        // 使用 force 模式，确保覆盖本地可能不完整的数据
+        loadSession(routeSessionId, { force: true })
+        // 重连后刷新待处理的权限请求和问题，避免用户错过后台产生的请求
+        refreshPendingRequests(sessionFamily, effectiveDirectory)
       }
       refetchModels().catch(() => {})
     },

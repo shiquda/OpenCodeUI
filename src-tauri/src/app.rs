@@ -6,6 +6,7 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tauri::{ipc::Channel, State};
 
 #[cfg(debug_assertions)]
@@ -80,8 +81,14 @@ async fn sse_connect(
     // 设置为活跃连接
     state.active_id.store(conn_id, Ordering::SeqCst);
 
-    // 构建请求
-    let client = reqwest::Client::new();
+    // 构建请求 - 配置超时防止连接静默死亡
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        // 注意：不设置 read timeout，因为 SSE 是长连接，空闲时间可能很长
+        // 改用下面的 tokio::time::timeout 包装每次 chunk 读取
+        .tcp_keepalive(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let mut req = client.get(&args.url);
 
     if let Some(ref auth) = args.auth_header {
@@ -110,6 +117,10 @@ async fn sse_connect(
     let _ = on_event.send(SseEvent::Connected);
 
     // 流式读取 SSE
+    // 使用 timeout 包装每次 chunk 读取，防止连接静默断开后永远挂起
+    // SSE 服务端通常每 30-60 秒发送心跳，90 秒无数据基本可以判定连接已死
+    const READ_TIMEOUT: Duration = Duration::from_secs(90);
+    
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     let mut event_data = String::new();
@@ -123,8 +134,8 @@ async fn sse_connect(
             return Ok(());
         }
 
-        match stream.next().await {
-            Some(Ok(chunk)) => {
+        match tokio::time::timeout(READ_TIMEOUT, stream.next()).await {
+            Ok(Some(Ok(chunk))) => {
                 let text = String::from_utf8_lossy(&chunk);
                 buffer.push_str(&text);
 
@@ -159,14 +170,14 @@ async fn sse_connect(
                     // 忽略 event:, id:, retry: 等 SSE 字段
                 }
             }
-            Some(Err(e)) => {
+            Ok(Some(Err(e))) => {
                 let msg = format!("SSE stream error: {}", e);
                 let _ = on_event.send(SseEvent::Error {
                     message: msg.clone(),
                 });
                 return Err(msg);
             }
-            None => {
+            Ok(None) => {
                 if !event_data.is_empty() {
                     let _ = on_event.send(SseEvent::Message {
                         raw: event_data.clone(),
@@ -177,6 +188,14 @@ async fn sse_connect(
                     reason: "Stream ended".to_string(),
                 });
                 return Ok(());
+            }
+            Err(_) => {
+                // 读取超时 — 连接可能已经静默断开
+                let msg = format!("SSE read timeout ({}s without data)", READ_TIMEOUT.as_secs());
+                let _ = on_event.send(SseEvent::Error {
+                    message: msg.clone(),
+                });
+                return Err(msg);
             }
         }
     }

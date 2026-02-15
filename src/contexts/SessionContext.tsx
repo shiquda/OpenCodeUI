@@ -149,11 +149,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // 更新 todoStore
         todoStore.setTodos(data.sessionID, data.todos)
       },
-      onReconnected: () => {
-        // SSE 重连后（包括切换服务器触发的重连）
-        // 先清空旧数据，避免显示上一个服务器的 session
+      onReconnected: (reason) => {
+        // SSE 重连成功后
+        // 清空旧 session 列表，重新从服务器拉取
         setSessions([])
-        setCurrentSessionId(null)
+        
+        if (reason === 'server-switch') {
+          // 切换服务器：旧 session 在新服务器上不存在，必须清除
+          setCurrentSessionId(null)
+        }
+        // 网络重连：保留 currentSessionId，不把用户踢出当前 session
+        
         // 重新加载 session 列表
         fetchSessionsRef.current()
       },

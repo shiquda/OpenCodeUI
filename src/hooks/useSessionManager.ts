@@ -43,8 +43,10 @@ export function useSessionManager({
   // Load Session
   // ============================================
 
-  const loadSession = useCallback(async (sid: string) => {
-    if (loadingRef.current) return
+  const loadSession = useCallback(async (sid: string, options?: { force?: boolean }) => {
+    const force = options?.force ?? false
+    
+    if (loadingRef.current && !force) return
     loadingRef.current = true
 
     const dir = directoryRef.current
@@ -54,6 +56,7 @@ export function useSessionManager({
     const hasExistingMessages = existingState && existingState.messages.length > 0
     
     // 如果已经有消息且正在 streaming，不能覆盖消息，但仍需加载元数据
+    // force 模式下也不覆盖正在 streaming 的消息
     if (hasExistingMessages && existingState.isStreaming) {
       // 异步加载 session 元数据（不阻塞）
       const dir = directoryRef.current
@@ -85,8 +88,9 @@ export function useSessionManager({
       ])
 
       // 再次检查：加载期间 SSE 可能已经推送了更多消息
+      // force 模式下（重连）始终用服务器数据覆盖，因为本地数据可能不完整
       const currentState = messageStore.getSessionState(sid)
-      if (currentState && currentState.messages.length > apiMessages.length) {
+      if (!force && currentState && currentState.messages.length > apiMessages.length) {
         // SSE 推送的消息比 API 返回的多，说明有新消息，跳过覆盖
         messageStore.setLoadState(sid, 'loaded')
         onLoadComplete?.()

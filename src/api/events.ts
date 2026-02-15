@@ -62,7 +62,13 @@ export function subscribeToConnectionState(fn: (info: ConnectionInfo) => void): 
 // ============================================
 
 const RECONNECT_DELAYS = [1000, 2000, 3000, 5000, 10000, 30000]
+/** 后台时使用更激进的重连延迟，确保尽快恢复连接 */
+const BACKGROUND_RECONNECT_DELAYS = [500, 1000, 2000, 3000, 5000, 10000]
 const HEARTBEAT_TIMEOUT = 60000
+/** 后台时的心跳超时（更宽松，因为后台 timer 可能不准） */
+const BACKGROUND_HEARTBEAT_TIMEOUT = 120000
+/** 后台 keepalive 间隔：定期检查连接是否还活着 */
+const BACKGROUND_KEEPALIVE_INTERVAL = 30000
 
 // 所有订阅者的 callbacks
 const allSubscribers = new Set<EventCallbacks>()
@@ -71,23 +77,31 @@ const allSubscribers = new Set<EventCallbacks>()
 let singletonController: AbortController | null = null
 let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let keepaliveTimer: ReturnType<typeof setInterval> | null = null
 let isConnecting = false
 let lifecycleListenersRegistered = false
 /** 标记连接曾经成功过（用于判断是否为"重连"） */
 let hasConnectedBefore = false
 /** 连接代次，每次 reconnectSSE() 递增，旧代次的事件会被丢弃 */
 let connectionGeneration = 0
+/** 当前是否在后台 */
+let isInBackground = false
+/** 是否因为切换服务器而触发的重连 */
+let isServerSwitch = false
 
 function resetHeartbeat() {
   if (heartbeatTimer) clearTimeout(heartbeatTimer)
   
   updateConnectionState({ lastEventTime: Date.now() })
   
+  // 后台时使用更宽松的超时，因为移动端后台 timer 可能被冻结/延迟
+  const timeout = isInBackground ? BACKGROUND_HEARTBEAT_TIMEOUT : HEARTBEAT_TIMEOUT
+  
   heartbeatTimer = setTimeout(() => {
-    console.warn('[SSE] No events received for 60s, reconnecting...')
+    console.warn(`[SSE] No events received for ${timeout / 1000}s, reconnecting...`)
     updateConnectionState({ state: 'disconnected', error: 'Heartbeat timeout' })
     scheduleReconnect()
-  }, HEARTBEAT_TIMEOUT)
+  }, timeout)
 }
 
 function scheduleReconnect() {
@@ -95,10 +109,12 @@ function scheduleReconnect() {
   if (allSubscribers.size === 0) return // 没有订阅者就不重连
   
   const attempt = connectionInfo.reconnectAttempt
-  const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)]
+  // 后台时使用更激进的重连策略
+  const delays = isInBackground ? BACKGROUND_RECONNECT_DELAYS : RECONNECT_DELAYS
+  const delay = delays[Math.min(attempt, delays.length - 1)]
   
   if (import.meta.env.DEV) {
-    console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${attempt + 1})...`)
+    console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${attempt + 1}, background: ${isInBackground})...`)
   }
   
   reconnectTimer = setTimeout(() => {
@@ -109,7 +125,30 @@ function scheduleReconnect() {
 
 function connectSingleton() {
   if (isConnecting || allSubscribers.size === 0) return
-  if (connectionInfo.state === 'connected') return
+  
+  // 如果状态声称 connected，验证连接是否真的活着
+  if (connectionInfo.state === 'connected') {
+    const timeSinceLastEvent = Date.now() - connectionInfo.lastEventTime
+    if (timeSinceLastEvent > HEARTBEAT_TIMEOUT) {
+      // 太久没收到事件，连接可能已死，强制断开再重连
+      if (import.meta.env.DEV) {
+        console.log(`[SSE] connectSingleton: state=connected but stale (${Math.round(timeSinceLastEvent / 1000)}s), forcing disconnect`)
+      }
+      connectionGeneration++
+      if (isTauri()) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('sse_disconnect').catch(() => {})
+        }).catch(() => {})
+      }
+      if (singletonController) {
+        singletonController.abort()
+        singletonController = null
+      }
+      updateConnectionState({ state: 'disconnected' })
+    } else {
+      return // 连接确实还活着
+    }
+  }
   
   isConnecting = true
   
@@ -175,7 +214,9 @@ async function connectViaTauri() {
             console.log('[SSE/Tauri] Connected', isReconnect ? '(reconnected)' : '(first)')
           }
           if (isReconnect) {
-            allSubscribers.forEach(cb => cb.onReconnected?.())
+            const reason = isServerSwitch ? 'server-switch' as const : 'network' as const
+            isServerSwitch = false
+            allSubscribers.forEach(cb => cb.onReconnected?.(reason))
           }
           break
         }
@@ -287,7 +328,9 @@ function connectViaBrowser() {
 
       // 重连成功后通知所有订阅者
       if (isReconnect) {
-        allSubscribers.forEach(cb => cb.onReconnected?.())
+        const reason = isServerSwitch ? 'server-switch' as const : 'network' as const
+        isServerSwitch = false
+        allSubscribers.forEach(cb => cb.onReconnected?.(reason))
       }
 
       const reader = response.body?.getReader()
@@ -363,9 +406,68 @@ function connectViaBrowser() {
     })
 }
 
+// ============================================
+// Background Keepalive
+// ============================================
+
+/**
+ * 后台 keepalive：定期检查连接是否还活着
+ * 移动端后台时 SSE 连接可能静默断开，timer 也可能被冻结
+ * 这个轮询机制可以在 timer 恢复执行时及时发现连接已死
+ */
+function startBackgroundKeepalive() {
+  stopBackgroundKeepalive()
+  
+  keepaliveTimer = setInterval(() => {
+    const now = Date.now()
+    const timeSinceLastEvent = now - connectionInfo.lastEventTime
+    const timeout = BACKGROUND_HEARTBEAT_TIMEOUT
+    
+    if (import.meta.env.DEV) {
+      console.log(`[SSE] Background keepalive check: last event ${Math.round(timeSinceLastEvent / 1000)}s ago, state=${connectionInfo.state}`)
+    }
+    
+    if (connectionInfo.state === 'connected' && timeSinceLastEvent > timeout) {
+      // 连接声称是 connected，但已经太久没收到事件了 — 连接可能已经静默断开
+      console.warn('[SSE] Background keepalive: connection appears dead, forcing reconnect')
+      
+      // 断开旧连接
+      if (isTauri()) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('sse_disconnect').catch(() => {})
+        }).catch(() => {})
+      }
+      if (singletonController) {
+        singletonController.abort()
+        singletonController = null
+      }
+      isConnecting = false
+      connectionGeneration++
+      
+      updateConnectionState({ state: 'disconnected', error: 'Background keepalive timeout' })
+      scheduleReconnect()
+    } else if (connectionInfo.state === 'disconnected' || connectionInfo.state === 'error') {
+      // 已知断连状态，但可能 reconnectTimer 被后台冻结了 — 主动触发重连
+      if (!reconnectTimer && !isConnecting) {
+        console.warn('[SSE] Background keepalive: detected stale disconnect, forcing reconnect')
+        updateConnectionState({ reconnectAttempt: 0 })
+        connectSingleton()
+      }
+    }
+  }, BACKGROUND_KEEPALIVE_INTERVAL)
+}
+
+function stopBackgroundKeepalive() {
+  if (keepaliveTimer) {
+    clearInterval(keepaliveTimer)
+    keepaliveTimer = null
+  }
+}
+
 function disconnectSingleton() {
   if (heartbeatTimer) clearTimeout(heartbeatTimer)
   if (reconnectTimer) clearTimeout(reconnectTimer)
+  stopBackgroundKeepalive()
   
   // Tauri: 调用 Rust 侧断开命令
   if (isTauri()) {
@@ -391,36 +493,75 @@ function disconnectSingleton() {
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
     // 页面恢复前台
-    if (connectionInfo.state !== 'connected' && allSubscribers.size > 0) {
+    isInBackground = false
+    stopBackgroundKeepalive()
+    
+    if (import.meta.env.DEV) {
+      console.log(`[SSE] Page became visible, state=${connectionInfo.state}, lastEvent=${Math.round((Date.now() - connectionInfo.lastEventTime) / 1000)}s ago`)
+    }
+    
+    if (allSubscribers.size === 0) return
+    
+    if (connectionInfo.state !== 'connected') {
+      // 明确断连，立即重连
       if (import.meta.env.DEV) {
-        console.log('[SSE] Page became visible, forcing reconnect...')
+        console.log('[SSE] Page visible: not connected, forcing reconnect...')
       }
-      // 取消当前重连计划，立即重连
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      reconnectTimer = null
-      updateConnectionState({ reconnectAttempt: 0 })
-      
-      // 断开旧连接
-      if (isTauri()) {
-        import('@tauri-apps/api/core').then(({ invoke }) => {
-          invoke('sse_disconnect').catch(() => {})
-        }).catch(() => {})
+      forceReconnectNow()
+    } else {
+      // 状态是 connected，但连接可能已经在后台静默断开
+      // 检查最后一次收到事件的时间
+      const timeSinceLastEvent = Date.now() - connectionInfo.lastEventTime
+      if (timeSinceLastEvent > HEARTBEAT_TIMEOUT) {
+        // 太久没收到事件了，连接大概率已死
+        console.warn(`[SSE] Page visible: connection may be stale (last event ${Math.round(timeSinceLastEvent / 1000)}s ago), forcing reconnect`)
+        forceReconnectNow()
+      } else {
+        // 连接看起来还活着，重置心跳为前台模式
+        resetHeartbeat()
       }
-      if (singletonController) {
-        singletonController.abort()
-        singletonController = null
-      }
-      isConnecting = false
-      
-      connectSingleton()
     }
   } else {
-    // 页面进入后台 - 暂停心跳检测（移动端 timer 会被冻结）
-    if (heartbeatTimer) {
-      clearTimeout(heartbeatTimer)
-      heartbeatTimer = null
+    // 页面进入后台
+    isInBackground = true
+    
+    if (import.meta.env.DEV) {
+      console.log('[SSE] Page entering background, switching to background mode')
+    }
+    
+    // 不再清除心跳！保持心跳运行，但切换为后台模式（更长超时）
+    // 心跳 timer 可能在后台被冻结，但 keepalive 轮询会在 timer 恢复时补上
+    resetHeartbeat()
+    
+    // 启动后台 keepalive 轮询
+    if (allSubscribers.size > 0) {
+      startBackgroundKeepalive()
     }
   }
+}
+
+/**
+ * 强制立即重连：断开旧连接、重置计数器、立即发起新连接
+ */
+function forceReconnectNow() {
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  reconnectTimer = null
+  updateConnectionState({ reconnectAttempt: 0 })
+  
+  // 断开旧连接
+  connectionGeneration++
+  if (isTauri()) {
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke('sse_disconnect').catch(() => {})
+    }).catch(() => {})
+  }
+  if (singletonController) {
+    singletonController.abort()
+    singletonController = null
+  }
+  isConnecting = false
+  
+  connectSingleton()
 }
 
 function handleOnline() {
@@ -428,22 +569,7 @@ function handleOnline() {
     console.log('[SSE] Network online, forcing reconnect...')
   }
   if (connectionInfo.state !== 'connected' && allSubscribers.size > 0) {
-    if (reconnectTimer) clearTimeout(reconnectTimer)
-    reconnectTimer = null
-    updateConnectionState({ reconnectAttempt: 0 })
-    
-    if (isTauri()) {
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('sse_disconnect').catch(() => {})
-      }).catch(() => {})
-    }
-    if (singletonController) {
-      singletonController.abort()
-      singletonController = null
-    }
-    isConnecting = false
-    
-    connectSingleton()
+    forceReconnectNow()
   }
 }
 
@@ -453,6 +579,7 @@ function handleOffline() {
   }
   // 标记为断连，但不尝试重连（没网重连也没用）
   if (connectionInfo.state === 'connected' || connectionInfo.state === 'connecting') {
+    connectionGeneration++
     if (isTauri()) {
       import('@tauri-apps/api/core').then(({ invoke }) => {
         invoke('sse_disconnect').catch(() => {})
@@ -465,6 +592,7 @@ function handleOffline() {
     isConnecting = false
     if (heartbeatTimer) clearTimeout(heartbeatTimer)
     if (reconnectTimer) clearTimeout(reconnectTimer)
+    stopBackgroundKeepalive()
     updateConnectionState({ state: 'disconnected', error: 'Network offline' })
   }
 }
@@ -584,6 +712,10 @@ export function reconnectSSE() {
   if (heartbeatTimer) clearTimeout(heartbeatTimer)
   if (reconnectTimer) clearTimeout(reconnectTimer)
   reconnectTimer = null
+  stopBackgroundKeepalive()
+  
+  // 标记为服务器切换，重连成功时 onReconnected 会携带 'server-switch' reason
+  isServerSwitch = true
   
   // 递增连接代次，使旧连接的事件回调自动失效
   connectionGeneration++

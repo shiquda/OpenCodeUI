@@ -28,7 +28,7 @@ interface GlobalEventsCallbacks {
   onSessionIdle?: (sessionID: string) => void
   onSessionError?: (sessionID: string) => void
   /** SSE 重连成功后触发，调用方可刷新当前 session 数据 */
-  onReconnected?: () => void
+  onReconnected?: (reason: 'network' | 'server-switch') => void
 }
 
 // ============================================
@@ -224,11 +224,11 @@ export function useGlobalEvents(callbacks?: GlobalEventsCallbacks) {
       // Reconnected → 通知调用方刷新数据
       // ============================================
 
-      onReconnected: () => {
+      onReconnected: (reason) => {
         if (import.meta.env.DEV) {
-          console.log('[GlobalEvents] SSE reconnected, notifying for data refresh')
+          console.log(`[GlobalEvents] SSE reconnected (reason: ${reason}), notifying for data refresh`)
         }
-        callbacksRef.current?.onReconnected?.()
+        callbacksRef.current?.onReconnected?.(reason)
       },
     })
 
