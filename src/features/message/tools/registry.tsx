@@ -191,8 +191,13 @@ function writeExtractData(part: ToolPart): ExtractedToolData {
   const base = defaultExtractData(part)
   const inputObj = part.state.input as Record<string, unknown> | undefined
   
-  if (inputObj?.content) {
-    base.output = String(inputObj.content)
+  // 从 input.content 构造 diff（和 editExtractData 一致）
+  // 状态控制由渲染层（OutputBlock）统一处理，extractData 只做数据转换
+  if (!base.files && !base.diff && inputObj?.content && typeof inputObj.content === 'string') {
+    base.diff = {
+      before: '',
+      after: inputObj.content
+    }
   }
   
   return base

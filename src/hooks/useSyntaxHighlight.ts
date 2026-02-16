@@ -281,7 +281,12 @@ export function useSyntaxHighlight(code: string, options: HighlightOptions & { m
   const prevKeyRef = useRef<{ code: string; lang: string; theme: BundledTheme } | null>(null)
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) {
+      // 禁用时清除 output，防止返回旧代码的高亮结果给调用方
+      setOutput(null)
+      setIsLoading(false)
+      return
+    }
 
     let cancelled = false
     const prevKey = prevKeyRef.current

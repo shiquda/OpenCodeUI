@@ -66,6 +66,7 @@ interface OutputBlockProps {
 }
 
 function OutputBlock({ tool, data, isActive, hasError, hasOutput }: OutputBlockProps) {
+  // 1. Error 优先
   if (hasError) {
     return (
       <ContentBlock 
@@ -76,6 +77,19 @@ function OutputBlock({ tool, data, isActive, hasError, hasOutput }: OutputBlockP
     )
   }
   
+  // 2. 工具活跃时（running/pending）统一显示 loading
+  //    所有工具行为一致，权限弹窗已有预览，这里不重复展示
+  if (isActive) {
+    return (
+      <ContentBlock 
+        label="Output"
+        isLoading={true}
+        loadingText="Running..."
+      />
+    )
+  }
+  
+  // 3. 完成后显示结果
   if (hasOutput) {
     // Multiple files with diff
     if (data.files) {
@@ -121,12 +135,10 @@ function OutputBlock({ tool, data, isActive, hasError, hasOutput }: OutputBlockP
     )
   }
   
-  // Loading
+  // 4. 无输出
   return (
     <ContentBlock 
       label="Output"
-      isLoading={isActive}
-      loadingText="Running..."
     />
   )
 }

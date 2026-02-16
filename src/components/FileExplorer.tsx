@@ -947,8 +947,15 @@ export function CodePreview({
   const [scrollTop, setScrollTop] = useState(0)
   const [containerHeight, setContainerHeight] = useState(0)
   
-  // 缓存高亮结果
+  // 缓存高亮结果 - 仅在同一段 code 的高亮加载期间保留旧结果
   const highlightedLinesRef = useRef<string[] | null>(null)
+  const highlightedCodeRef = useRef(code)
+
+  // code 变化时清除缓存，防止显示旧代码的高亮内容
+  if (highlightedCodeRef.current !== code) {
+    highlightedLinesRef.current = null
+    highlightedCodeRef.current = code
+  }
   
   // 解析高亮后的行
   const highlightedLines = useMemo(() => {
