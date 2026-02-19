@@ -120,8 +120,6 @@ export function useFileExplorer(options: UseFileExplorerOptions = {}): UseFileEx
                 status,
               })
             })
-            // 计算目录的累积状态
-            computeDirectoryStatus(statusMap)
           }
         } catch {
           // 忽略 session diff 加载失败
@@ -129,6 +127,8 @@ export function useFileExplorer(options: UseFileExplorerOptions = {}): UseFileEx
       }
       
       if (loadId === loadIdRef.current) {
+        // 从文件状态推算所有父目录的累积状态
+        computeDirectoryStatus(statusMap)
         setFileStatus(statusMap)
       }
     } catch (e) {
@@ -332,10 +332,12 @@ function computeDirectoryStatus(statusMap: Map<string, FileStatusItem>): void {
   const dirStatuses = new Map<string, 'added' | 'modified' | 'deleted'>()
   
   for (const [filePath, item] of statusMap) {
+    // 检测原始路径使用的分隔符，保持一致
+    const sep = filePath.includes('\\') ? '\\' : '/'
     const parts = filePath.split(/[/\\]/)
     // 构建所有父目录路径
     for (let i = 1; i < parts.length; i++) {
-      const dirPath = parts.slice(0, i).join('/')
+      const dirPath = parts.slice(0, i).join(sep)
       const existingStatus = dirStatuses.get(dirPath)
       const newStatus = item.status as 'added' | 'modified' | 'deleted'
       

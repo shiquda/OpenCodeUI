@@ -16,10 +16,12 @@ import {
   RetryIcon,
   CloseIcon,
   AlertCircleIcon,
+  DownloadIcon,
 } from './Icons'
 import { detectLanguage } from '../utils/languageUtils'
 import { useSyntaxHighlight } from '../hooks/useSyntaxHighlight'
 import { getPreviewCategory, isBinaryContent, isTextualMedia, buildDataUrl, buildTextDataUrl, decodeBase64Text, formatMimeType, type PreviewCategory } from '../utils/mimeUtils'
+import { downloadFileContent } from '../utils/downloadUtils'
 import type { FileContent } from '../api/types'
 
 // 常量
@@ -427,6 +429,13 @@ function FilePreview({ path, content, isLoading, error, onClose, isResizing = fa
   const fileName = path?.split(/[/\\]/).pop() || 'Untitled'
   const language = path ? detectLanguage(path) : 'text'
 
+  // 下载当前文件
+  const handleDownload = useCallback(() => {
+    if (content) {
+      downloadFileContent(content, fileName)
+    }
+  }, [content, fileName])
+
   // 处理内容类型分发
   const displayContent = useMemo(() => {
     if (!content) return null
@@ -484,7 +493,7 @@ function FilePreview({ path, content, isLoading, error, onClose, isResizing = fa
   }, [content])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Preview Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-100/50 bg-bg-100/30 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -496,16 +505,31 @@ function FilePreview({ path, content, isLoading, error, onClose, isResizing = fa
             </span>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-200 rounded transition-colors shrink-0"
-        >
-          <CloseIcon size={12} />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {/* 下载按钮 */}
+          {content && (
+            <button
+              onClick={handleDownload}
+              className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-200 rounded transition-colors"
+              title={`Save ${fileName}`}
+            >
+              <DownloadIcon size={12} />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-200 rounded transition-colors"
+          >
+            <CloseIcon size={12} />
+          </button>
+        </div>
       </div>
 
       {/* Preview Content */}
-      <div ref={scrollRef} className="flex-1 overflow-auto panel-scrollbar">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto panel-scrollbar"
+      >
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-text-400 text-xs">
             Loading...
@@ -523,7 +547,7 @@ function FilePreview({ path, content, isLoading, error, onClose, isResizing = fa
             fileName={fileName}
           />
         ) : displayContent?.type === 'binary' ? (
-          <BinaryPlaceholder mimeType={displayContent.mimeType} fileName={fileName} />
+          <BinaryPlaceholder mimeType={displayContent.mimeType} fileName={fileName} onDownload={handleDownload} />
         ) : displayContent?.type === 'textMedia' ? (
           <TextMediaPreview
             dataUrl={displayContent.dataUrl}
@@ -542,6 +566,7 @@ function FilePreview({ path, content, isLoading, error, onClose, isResizing = fa
           </div>
         )}
       </div>
+
     </div>
   )
 }
@@ -814,15 +839,25 @@ function TextMediaPreview({ dataUrl, text, language, fileName, isResizing = fals
 interface BinaryPlaceholderProps {
   mimeType: string
   fileName: string
+  onDownload?: () => void
 }
 
-function BinaryPlaceholder({ mimeType, fileName }: BinaryPlaceholderProps) {
+function BinaryPlaceholder({ mimeType, fileName, onDownload }: BinaryPlaceholderProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full text-text-400 text-xs gap-2 p-4">
       <FileIcon size={32} className="opacity-30" />
       <span className="font-medium text-text-300">{fileName}</span>
       <span>{formatMimeType(mimeType)}</span>
       <span className="text-text-500 text-[10px]">Binary file — preview not available</span>
+      {onDownload && (
+        <button
+          onClick={onDownload}
+          className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-bg-200 hover:bg-bg-300 text-text-200 rounded transition-colors text-[11px]"
+        >
+          <DownloadIcon size={12} />
+          Download
+        </button>
+      )}
     </div>
   )
 }
